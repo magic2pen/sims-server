@@ -164,6 +164,31 @@
     <pre id="listOfficersOut">—</pre>
   </div>
 
+  <div class="card">
+    <h2>6. Add a School (admin only)</h2>
+    <label>UDISE Code</label>
+    <input id="schoolUdise" placeholder="e.g. 16010100101">
+    <label>School Name</label>
+    <input id="schoolName" placeholder="Bishrambari HS School">
+    <label>Category</label>
+    <input id="schoolCategory" placeholder="High School">
+    <label>District</label>
+    <input id="schoolDistrict" placeholder="West Tripura">
+    <label>Block</label>
+    <input id="schoolBlock" placeholder="Jirania RD Block">
+    <button onclick="createSchool()">Add School</button>
+    <pre id="createSchoolOut">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>7. List Schools (any logged-in user)</h2>
+    <p style="font-size:12px;color:var(--text-secondary);margin:0 0 8px;">
+      Uses the officer login token from box 4 above — log in as an officer first.
+    </p>
+    <button class="secondary" onclick="listSchools()">Refresh List</button>
+    <pre id="listSchoolsOut">—</pre>
+  </div>
+
 </div>
 
 <script>
@@ -173,6 +198,7 @@
   const API_BASE = '';
 
   let adminToken = null;
+  let officerToken = null;
 
   async function initDatabase() {
     const secret = document.getElementById('setupSecret').value;
@@ -288,6 +314,53 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+      if (data.token) officerToken = data.token;
+    } catch (e) {
+      out.textContent = 'Error: ' + e.message;
+    }
+  }
+
+  async function createSchool() {
+    const out = document.getElementById('createSchoolOut');
+    if (!adminToken) {
+      out.textContent = 'Log in as admin first (box 2 above).';
+      return;
+    }
+    const body = {
+      udiseCode: document.getElementById('schoolUdise').value,
+      name: document.getElementById('schoolName').value,
+      category: document.getElementById('schoolCategory').value,
+      district: document.getElementById('schoolDistrict').value,
+      block: document.getElementById('schoolBlock').value
+    };
+    out.textContent = 'Creating...';
+    try {
+      const res = await fetch(`${API_BASE}/api/schools`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+      out.textContent = 'Error: ' + e.message;
+    }
+  }
+
+  async function listSchools() {
+    const out = document.getElementById('listSchoolsOut');
+    const token = officerToken || adminToken;
+    if (!token) {
+      out.textContent = 'Log in as an officer (box 4) or admin (box 2) first.';
+      return;
+    }
+    out.textContent = 'Loading...';
+    try {
+      const res = await fetch(`${API_BASE}/api/schools`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
       out.textContent = JSON.stringify(data, null, 2);
