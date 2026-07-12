@@ -92,6 +92,23 @@
 
 <div class="grid">
 
+  <div class="card full" style="border: 2px solid #1E4FA3;">
+    <h2>0. One-Time Setup (do this first)</h2>
+    <label>Setup Secret (must match SETUP_SECRET in Render's Environment settings)</label>
+    <input id="setupSecret" type="password" placeholder="Enter your setup secret">
+    <button onclick="initDatabase()">Step A — Create Database Tables</button>
+    <pre id="initDbOut">—</pre>
+
+    <label style="margin-top: 18px;">Your Name</label>
+    <input id="setupAdminName" placeholder="Your Name">
+    <label>Your Email</label>
+    <input id="setupAdminEmail" type="email" placeholder="you@example.com">
+    <label>Choose a Password</label>
+    <input id="setupAdminPassword" type="password" placeholder="Choose a password">
+    <button onclick="createFirstAdmin()">Step B — Create My Admin Account</button>
+    <pre id="createAdminOut">—</pre>
+  </div>
+
   <div class="card">
     <h2>1. Server Health Check</h2>
     <button onclick="checkHealth()">Check Server Status</button>
@@ -156,6 +173,43 @@
   const API_BASE = '';
 
   let adminToken = null;
+
+  async function initDatabase() {
+    const secret = document.getElementById('setupSecret').value;
+    const out = document.getElementById('initDbOut');
+    out.textContent = 'Creating tables...';
+    try {
+      const res = await fetch(`${API_BASE}/api/setup/init-database`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret })
+      });
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+      out.textContent = 'Error: ' + e.message;
+    }
+  }
+
+  async function createFirstAdmin() {
+    const secret = document.getElementById('setupSecret').value;
+    const name = document.getElementById('setupAdminName').value;
+    const email = document.getElementById('setupAdminEmail').value;
+    const password = document.getElementById('setupAdminPassword').value;
+    const out = document.getElementById('createAdminOut');
+    out.textContent = 'Creating admin account...';
+    try {
+      const res = await fetch(`${API_BASE}/api/setup/create-admin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret, name, email, password })
+      });
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+      out.textContent = 'Error: ' + e.message;
+    }
+  }
 
   async function checkHealth() {
     const out = document.getElementById('healthOut');
