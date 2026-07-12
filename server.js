@@ -6,6 +6,7 @@ const path = require('path');
 const adminAuthRoutes = require('./routes/adminAuth');
 const officerAuthRoutes = require('./routes/officerAuth');
 const officersRoutes = require('./routes/officers');
+const setupRoutes = require('./routes/setup');
 
 const app = express();
 app.use(cors());
@@ -22,6 +23,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/admin', adminAuthRoutes);
 app.use('/api/officer', officerAuthRoutes);
 app.use('/api/officers', officersRoutes);
+app.use('/api/setup', setupRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
