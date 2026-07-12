@@ -8,10 +8,13 @@ const officerAuthRoutes = require('./routes/officerAuth');
 const officersRoutes = require('./routes/officers');
 const setupRoutes = require('./routes/setup');
 const schoolsRoutes = require('./routes/schools');
+const inspectionsRoutes = require('./routes/inspections');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// Default body size limit is tiny (100kb) — way too small for a PDF report
+// (sent as base64 text) with embedded photos. 25mb gives comfortable room.
+app.use(express.json({ limit: '25mb' }));
 
 // Serve the simple test page (public/test.html) so we can try the API
 // in a browser before the real web portal exists.
@@ -26,6 +29,7 @@ app.use('/api/officer', officerAuthRoutes);
 app.use('/api/officers', officersRoutes);
 app.use('/api/setup', setupRoutes);
 app.use('/api/schools', schoolsRoutes);
+app.use('/api/inspections', inspectionsRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
