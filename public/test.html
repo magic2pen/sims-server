@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIMS Server — API Test Page</title>
+<style>
+  :root {
+    --gov-blue: #1E4FA3;
+    --gov-blue-dark: #15376F;
+    --gov-green: #1E8A4C;
+    --bg: #F5F6FA;
+    --text-secondary: #6B7280;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    margin: 0;
+    padding: 24px 16px 60px;
+    color: #1a1a1a;
+  }
+  header {
+    background: var(--gov-blue);
+    color: white;
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+  }
+  header h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; opacity: 0.85; font-size: 13px; }
+  .grid {
+    max-width: 900px;
+    margin: 0 auto;
+    display: grid;
+    gap: 20px;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 760px) {
+    .grid { grid-template-columns: 1fr 1fr; }
+  }
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .card h2 { font-size: 15px; margin: 0 0 12px; color: var(--gov-blue); }
+  label { display: block; font-size: 12px; color: var(--text-secondary); margin: 10px 0 4px; }
+  input {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  button {
+    margin-top: 14px;
+    width: 100%;
+    padding: 11px;
+    border: none;
+    border-radius: 8px;
+    background: var(--gov-blue);
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button:hover { background: var(--gov-blue-dark); }
+  button.secondary { background: white; color: var(--gov-blue); border: 1px solid var(--gov-blue); }
+  pre {
+    background: #0f172a;
+    color: #d1fae5;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    overflow-x: auto;
+    margin-top: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .status { font-size: 12px; margin-top: 8px; color: var(--text-secondary); }
+  .full { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>SIMS Central Server — API Test Page</h1>
+  <p>Temporary tool for testing the backend directly. This gets replaced by the real Web Portal in a later phase.</p>
+</header>
+
+<div class="grid">
+
+  <div class="card">
+    <h2>1. Server Health Check</h2>
+    <button onclick="checkHealth()">Check Server Status</button>
+    <pre id="healthOut">Not checked yet.</pre>
+  </div>
+
+  <div class="card">
+    <h2>2. Admin Login</h2>
+    <label>Email</label>
+    <input id="adminEmail" type="email" placeholder="admin@example.com">
+    <label>Password</label>
+    <input id="adminPassword" type="password" placeholder="••••••••">
+    <button onclick="adminLogin()">Log In as Admin</button>
+    <div class="status" id="adminTokenStatus">No admin token yet.</div>
+    <pre id="adminLoginOut">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>3. Create Officer Account (admin only)</h2>
+    <label>Officer ID (e.g. OFF-0001)</label>
+    <input id="offOfficerId" placeholder="OFF-0001">
+    <label>Name</label>
+    <input id="offName" placeholder="Tushar Alam">
+    <label>Designation</label>
+    <input id="offDesignation" placeholder="Block Development Officer">
+    <label>District</label>
+    <input id="offDistrict" placeholder="West Tripura">
+    <label>Block</label>
+    <input id="offBlock" placeholder="Jirania RD Block">
+    <label>Email</label>
+    <input id="offEmail" type="email" placeholder="officer@example.com">
+    <label>Username (for app login)</label>
+    <input id="offUsername" placeholder="tushar.alam">
+    <label>Password (for app login)</label>
+    <input id="offPassword" type="password" placeholder="Set a starting password">
+    <button onclick="createOfficer()">Create Officer Account</button>
+    <pre id="createOfficerOut">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>4. Officer Login (as the app would do it)</h2>
+    <label>Username</label>
+    <input id="loginUsername" placeholder="tushar.alam">
+    <label>Password</label>
+    <input id="loginPassword" type="password">
+    <button onclick="officerLogin()">Log In as Officer</button>
+    <pre id="officerLoginOut">—</pre>
+  </div>
+
+  <div class="card full">
+    <h2>5. List All Officers (admin only)</h2>
+    <button class="secondary" onclick="listOfficers()">Refresh List</button>
+    <pre id="listOfficersOut">—</pre>
+  </div>
+
+</div>
+
+<script>
+  // If you deploy this alongside the API on the same Render service, leave
+  // this as an empty string (relative URLs). If you ever host the test
+  // page separately, put the full API URL here instead.
+  const API_BASE = '';
+
+  let adminToken = null;
+
+  async function checkHealth() {
+    const out = document.getElementById('healthOut');
+    out.textContent = 'Checking...';
+    try {
+      const res = await fetch(`${API_BASE}/api/health`);
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+      out.textContent = 'Could not reach the server: ' + e.message;
+    }
+  }
+
+  async function adminLogin() {
+    const email = document.getElementById('adminEmail').value;
+    const password = document.getElementById('adminPassword').value;
+    const out = document.getElementById('adminLoginOut');
+    const status = document.getElementById('adminTokenStatus');
+    out.textContent = 'Logging in...';
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+      if (data.token) {
+        adminToken = data.token;
+        status.textContent = 'Admin token saved for this session ✓';
+      } else {
+        status.textContent = 'Login failed — no token received.';
+      }
+    } catch (e) {
+      out.textContent = 'Error: ' + e.message;
+    }
+  }
+
+  async function createOfficer() {
+    const out = document.getElementById('createOfficerOut');
+    if (!adminToken) {
+      out.textContent = 'Log in as admin first (box 2 above).';
+      return;
+    }
+    const body = {
+      officerId: document.getElementById('offOfficerId').value,
+      name: document.getElementById('offName').value,
+      designation: document.getElementById('offDesignation').value,
+      district: document.getElementById('offDistrict').value,
+      block: document.getElementById('offBlock').value,
+      email: document.getElementById('offEmail').value,
+      username: document.getElementById('offUsername').value,
+      password: document.getElementById('offPassword').value
+    };
+    out.textContent = 'Creating...';
+    try {
+      const res = await fetch(`${API_BASE}/api/officers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+      out.textContent = 'Error: ' + e.message;
+    }
+  }
+
+  async function officerLogin() {
+    const username = document.getElementById('loginUsername').value;
+    const password = document.getElementById('loginPassword').value;
+    const out = document.getElementById('officerLoginOut');
+    out.textContent = 'Logging in...';
+    try {
+      const res = await fetch(`${API_BASE}/api/officer/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+      out.textContent = 'Error: ' + e.message;
+    }
+  }
+
+  async function listOfficers() {
+    const out = document.getElementById('listOfficersOut');
+    if (!adminToken) {
+      out.textContent = 'Log in as admin first (box 2 above).';
+      return;
+    }
+    out.textContent = 'Loading...';
+    try {
+      const res = await fetch(`${API_BASE}/api/officers`, {
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+      out.textContent = 'Error: ' + e.message;
+    }
+  }
+
+  checkHealth();
+</script>
+
+</body>
+</html>
