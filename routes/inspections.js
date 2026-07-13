@@ -51,6 +51,17 @@ router.post('/', requireAuth('officer'), async (req, res) => {
        RETURNING id, school_name, uploaded_at`,
       [req.user.id, schoolId || null, schoolName, district, block, dateTime, answersJson, pdfBase64 || null, overallGrade]
     );
+
+    // If this school was assigned to this officer, close the loop —
+    // the assignment is now fulfilled, no manual step needed.
+    if (schoolId) {
+      await pool.query(
+        `UPDATE assignments SET status = 'completed'
+         WHERE officer_id = $1 AND school_id = $2 AND status = 'pending'`,
+        [req.user.id, schoolId]
+      );
+    }
+
     res.status(201).json({ success: true, inspection: result.rows[0] });
   } catch (err) {
     console.error(err);

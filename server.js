@@ -10,6 +10,7 @@ const adminsRoutes = require('./routes/admins');
 const setupRoutes = require('./routes/setup');
 const schoolsRoutes = require('./routes/schools');
 const inspectionsRoutes = require('./routes/inspections');
+const assignmentsRoutes = require('./routes/assignments');
 
 const app = express();
 app.use(cors());
@@ -32,6 +33,7 @@ app.use('/api/admins', adminsRoutes);
 app.use('/api/setup', setupRoutes);
 app.use('/api/schools', schoolsRoutes);
 app.use('/api/inspections', inspectionsRoutes);
+app.use('/api/assignments', assignmentsRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
