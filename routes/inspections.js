@@ -19,15 +19,17 @@ function computeOverallGrade(answersJson) {
       const v = answers[id] && answers[id].value ? parseInt(answers[id].value, 10) : 0;
       return total + (isNaN(v) ? 0 : v);
     }, 0);
-    if (sum > 63) return 'A+';
-    if (sum > 56) return 'A';
-    if (sum > 49) return 'B+';
-    if (sum > 42) return 'B';
-    if (sum > 35) return 'C';
-    if (sum > 28) return 'D';
-    return 'Poor';
+    let grade;
+    if (sum > 63) grade = 'A+';
+    else if (sum > 56) grade = 'A';
+    else if (sum > 49) grade = 'B+';
+    else if (sum > 42) grade = 'B';
+    else if (sum > 35) grade = 'C';
+    else if (sum > 28) grade = 'D';
+    else grade = 'Poor';
+    return { grade, score: sum };
   } catch (e) {
-    return null;
+    return { grade: null, score: null };
   }
 }
 
@@ -41,15 +43,15 @@ router.post('/', requireAuth('officer'), async (req, res) => {
     return res.status(400).json({ error: 'schoolName and answersJson are required' });
   }
 
-  const overallGrade = computeOverallGrade(answersJson);
+  const { grade: overallGrade, score: gradeScore } = computeOverallGrade(answersJson);
 
   try {
     const result = await pool.query(
       `INSERT INTO inspections
-        (officer_id, school_id, school_name, district, block, inspection_datetime, answers_json, pdf_base64, overall_grade)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        (officer_id, school_id, school_name, district, block, inspection_datetime, answers_json, pdf_base64, overall_grade, grade_score)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING id, school_name, uploaded_at`,
-      [req.user.id, schoolId || null, schoolName, district, block, dateTime, answersJson, pdfBase64 || null, overallGrade]
+      [req.user.id, schoolId || null, schoolName, district, block, dateTime, answersJson, pdfBase64 || null, overallGrade, gradeScore]
     );
 
     // If this school was assigned to this officer, close the loop —
