@@ -244,6 +244,18 @@
     <pre id="listSchoolsOut">—</pre>
   </div>
 
+  <div class="card full" style="border: 2px solid #D32F2F;">
+    <h2>8. Debug: Get One Inspection By ID</h2>
+    <p style="font-size:12px;color:var(--text-secondary);margin:0 0 8px;">
+      Direct test for the "View PDF" / inspection detail endpoint — uses
+      whichever token (admin or officer) you logged in with above.
+    </p>
+    <label>Inspection ID</label>
+    <input id="debugInspectionId" placeholder="e.g. 2">
+    <button onclick="debugGetInspection()">Fetch Inspection</button>
+    <pre id="debugInspectionOut">—</pre>
+  </div>
+
 </div>
 
 <script>
@@ -495,6 +507,45 @@
       out.textContent = JSON.stringify(data, null, 2);
     } catch (e) {
       out.textContent = 'Error: ' + e.message;
+    }
+  }
+
+  async function debugGetInspection() {
+    const out = document.getElementById('debugInspectionOut');
+    const token = adminToken || officerToken;
+    const id = document.getElementById('debugInspectionId').value;
+    if (!token) {
+      out.textContent = 'Log in as admin (box 2) or officer (box 4) first.';
+      return;
+    }
+    if (!id) {
+      out.textContent = 'Enter an inspection ID first.';
+      return;
+    }
+    out.textContent = 'Fetching...';
+    try {
+      const res = await fetch(`${API_BASE}/api/inspections/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const rawText = await res.text();
+      // Show status code + raw body always — this is the important part:
+      // if the server crashed or timed out, this reveals the real reason
+      // instead of a generic error swallowing it.
+      let display = `HTTP status: ${res.status}\n\n`;
+      try {
+        const parsed = JSON.parse(rawText);
+        // Truncate pdf_base64 for readability — it can be huge.
+        if (parsed.pdf_base64) {
+          display += `PDF present, length: ${parsed.pdf_base64.length} characters\n\n`;
+          parsed.pdf_base64 = parsed.pdf_base64.slice(0, 60) + '... (truncated for display)';
+        }
+        display += JSON.stringify(parsed, null, 2);
+      } catch (e) {
+        display += 'Response was NOT valid JSON. Raw response below:\n\n' + rawText.slice(0, 2000);
+      }
+      out.textContent = display;
+    } catch (e) {
+      out.textContent = 'Fetch itself failed (network-level): ' + e.message;
     }
   }
 

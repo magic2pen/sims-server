@@ -43,19 +43,31 @@ function logout() {
   window.location.href = 'login.html';
 }
 
+// Reads a fetch response as text first (never throws, unlike res.json()
+// on a non-JSON body), then tries to parse it as JSON. If that fails, or
+// the server didn't send an "error" field, the raw response text (and
+// HTTP status) is used instead — so failures are always diagnosable
+// instead of showing a generic "Request failed".
+async function readResponse(res) {
+  const rawText = await res.text();
+  let body = {};
+  try {
+    body = rawText ? JSON.parse(rawText) : {};
+  } catch (e) {
+    // Not JSON — probably a crash page, timeout, or proxy error page.
+  }
+  if (!res.ok) {
+    const detail = body.error || (rawText ? rawText.slice(0, 300) : `HTTP ${res.status} ${res.statusText}`);
+    throw new Error(`${detail} (status ${res.status})`);
+  }
+  return body;
+}
+
 async function apiGet(path) {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { Authorization: `Bearer ${getToken()}` }
   });
-  if (res.status === 401 || res.status === 403) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || 'Not authorized');
-  }
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || 'Request failed');
-  }
-  return res.json();
+  return readResponse(res);
 }
 
 async function apiPost(path, body) {
@@ -64,11 +76,7 @@ async function apiPost(path, body) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
     body: JSON.stringify(body)
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.error || 'Request failed');
-  }
-  return data;
+  return readResponse(res);
 }
 
 async function apiPatch(path, body) {
@@ -77,11 +85,7 @@ async function apiPatch(path, body) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
     body: JSON.stringify(body)
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.error || 'Request failed');
-  }
-  return data;
+  return readResponse(res);
 }
 
 function gradeClass(grade) {
