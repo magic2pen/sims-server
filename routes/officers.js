@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { isWithinJurisdiction } = require('../utils/jurisdiction');
 
 const router = express.Router();
 
@@ -44,6 +45,15 @@ router.post('/', async (req, res) => {
 
   if (!officerId || !name || !email || !username || !password) {
     return res.status(400).json({ error: 'officerId, name, email, username, and password are required' });
+  }
+  if (!district || !block) {
+    return res.status(400).json({ error: 'district and block are required' });
+  }
+
+  const creatorCtx = { admin_level: req.user.adminLevel, district: req.user.district, subdivision: req.user.subdivision, block: req.user.block };
+  const targetCtx = { district, subdivision, block };
+  if (!isWithinJurisdiction(creatorCtx, targetCtx)) {
+    return res.status(403).json({ error: 'You can only create officer accounts within your own jurisdiction.' });
   }
 
   try {

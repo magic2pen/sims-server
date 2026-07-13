@@ -6,6 +6,7 @@ const path = require('path');
 const adminAuthRoutes = require('./routes/adminAuth');
 const officerAuthRoutes = require('./routes/officerAuth');
 const officersRoutes = require('./routes/officers');
+const adminsRoutes = require('./routes/admins');
 const setupRoutes = require('./routes/setup');
 const schoolsRoutes = require('./routes/schools');
 const inspectionsRoutes = require('./routes/inspections');
@@ -27,6 +28,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/admin', adminAuthRoutes);
 app.use('/api/officer', officerAuthRoutes);
 app.use('/api/officers', officersRoutes);
+app.use('/api/admins', adminsRoutes);
 app.use('/api/setup', setupRoutes);
 app.use('/api/schools', schoolsRoutes);
 app.use('/api/inspections', inspectionsRoutes);

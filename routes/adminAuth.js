@@ -24,13 +24,25 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
+    const profile = {
+      id: admin.id,
+      name: admin.name,
+      email: admin.email,
+      adminLevel: admin.admin_level,
+      designation: admin.designation,
+      rank: admin.rank,
+      district: admin.district,
+      subdivision: admin.subdivision,
+      block: admin.block
+    };
+
     const token = jwt.sign(
-      { id: admin.id, role: 'admin', name: admin.name, email: admin.email },
+      { role: 'admin', ...profile },
       process.env.JWT_SECRET,
       { expiresIn: '12h' }
     );
 
-    res.json({ token, admin: { id: admin.id, name: admin.name, email: admin.email } });
+    res.json({ token, admin: profile });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error during login' });

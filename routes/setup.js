@@ -27,6 +27,10 @@ router.post('/init-database', async (req, res) => {
     await pool.query(schoolsSql);
     const inspectionsSql = fs.readFileSync(path.join(__dirname, '..', 'sql', 'inspections.sql'), 'utf8');
     await pool.query(inspectionsSql);
+    const gradeColSql = fs.readFileSync(path.join(__dirname, '..', 'sql', 'inspections_grade.sql'), 'utf8');
+    await pool.query(gradeColSql);
+    const adminHierarchySql = fs.readFileSync(path.join(__dirname, '..', 'sql', 'admin_hierarchy.sql'), 'utf8');
+    await pool.query(adminHierarchySql);
     res.json({ success: true, message: 'Database tables created (or already existed). You can now create your first admin.' });
   } catch (err) {
     console.error(err);

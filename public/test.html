@@ -126,6 +126,59 @@
     <pre id="adminLoginOut">—</pre>
   </div>
 
+  <div class="card" style="border: 2px solid #B8860B;">
+    <h2>2b. Complete Your Admin Profile (one-time, if new)</h2>
+    <p style="font-size:12px;color:var(--text-secondary);margin:0 0 8px;">
+      Your very first admin account was created before District/Subdivision/Block
+      existed as fields. Fill these in once so jurisdiction rules work correctly.
+      Log in as admin (box 2) first.
+    </p>
+    <label>District</label>
+    <input id="myAdminDistrict" placeholder="West Tripura">
+    <label>Subdivision (only if you're an SDM-level admin)</label>
+    <input id="myAdminSubdivision" placeholder="Leave blank if District-level">
+    <label>Block (only if you're a BDO-level admin)</label>
+    <input id="myAdminBlock" placeholder="Leave blank if District-level">
+    <button onclick="completeMyAdminProfile()">Save My Jurisdiction</button>
+    <pre id="completeProfileOut">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>2c. Create a More Junior Admin (delegate)</h2>
+    <p style="font-size:12px;color:var(--text-secondary);margin:0 0 8px;">
+      e.g. a DM creating an SDM or BDO account. You can only create posts
+      more junior than your own, within your own jurisdiction.
+    </p>
+    <label>Name</label>
+    <input id="subAdminName" placeholder="Full name">
+    <label>Email</label>
+    <input id="subAdminEmail" type="email" placeholder="email@example.com">
+    <label>Password</label>
+    <input id="subAdminPassword" type="password" placeholder="Set a starting password">
+    <label>Designation</label>
+    <select id="subAdminDesignation">
+      <option value="ADM (Additional District Magistrate)">ADM (Additional District Magistrate)</option>
+      <option value="DEO (District Education Officer)">DEO (District Education Officer)</option>
+      <option value="SDM (Sub-Divisional Magistrate)">SDM (Sub-Divisional Magistrate)</option>
+      <option value="Addl. SDM">Addl. SDM</option>
+      <option value="BDO (Block Development Officer)">BDO (Block Development Officer)</option>
+    </select>
+    <label>District</label>
+    <input id="subAdminDistrict" placeholder="West Tripura">
+    <label>Subdivision (required for SDM/Addl.SDM level)</label>
+    <input id="subAdminSubdivision" placeholder="e.g. Sadar Subdivision">
+    <label>Block (required for BDO level)</label>
+    <input id="subAdminBlock" placeholder="e.g. Jirania RD Block">
+    <button onclick="createSubAdmin()">Create Admin Account</button>
+    <pre id="createSubAdminOut">—</pre>
+  </div>
+
+  <div class="card full">
+    <h2>2d. List Admins Visible To Me</h2>
+    <button class="secondary" onclick="listAdmins()">Refresh List</button>
+    <pre id="listAdminsOut">—</pre>
+  </div>
+
   <div class="card">
     <h2>3. Create Officer Account (admin only)</h2>
     <label>Officer ID (e.g. OFF-0001)</label>
@@ -136,6 +189,8 @@
     <input id="offDesignation" placeholder="Block Development Officer">
     <label>District</label>
     <input id="offDistrict" placeholder="West Tripura">
+    <label>Subdivision (optional, but needed if an SDM-level admin created this)</label>
+    <input id="offSubdivision" placeholder="e.g. Sadar Subdivision">
     <label>Block</label>
     <input id="offBlock" placeholder="Jirania RD Block">
     <label>Email</label>
@@ -274,6 +329,79 @@
     }
   }
 
+  async function completeMyAdminProfile() {
+    const out = document.getElementById('completeProfileOut');
+    if (!adminToken) {
+      out.textContent = 'Log in as admin first (box 2 above).';
+      return;
+    }
+    const body = {
+      district: document.getElementById('myAdminDistrict').value,
+      subdivision: document.getElementById('myAdminSubdivision').value,
+      block: document.getElementById('myAdminBlock').value
+    };
+    out.textContent = 'Saving...';
+    try {
+      const res = await fetch(`${API_BASE}/api/admins/me`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2) +
+        '\n\nNOTE: log in again (box 2) to refresh your token with the updated jurisdiction.';
+    } catch (e) {
+      out.textContent = 'Error: ' + e.message;
+    }
+  }
+
+  async function createSubAdmin() {
+    const out = document.getElementById('createSubAdminOut');
+    if (!adminToken) {
+      out.textContent = 'Log in as admin first (box 2 above).';
+      return;
+    }
+    const body = {
+      name: document.getElementById('subAdminName').value,
+      email: document.getElementById('subAdminEmail').value,
+      password: document.getElementById('subAdminPassword').value,
+      designation: document.getElementById('subAdminDesignation').value,
+      district: document.getElementById('subAdminDistrict').value,
+      subdivision: document.getElementById('subAdminSubdivision').value,
+      block: document.getElementById('subAdminBlock').value
+    };
+    out.textContent = 'Creating...';
+    try {
+      const res = await fetch(`${API_BASE}/api/admins`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+      out.textContent = 'Error: ' + e.message;
+    }
+  }
+
+  async function listAdmins() {
+    const out = document.getElementById('listAdminsOut');
+    if (!adminToken) {
+      out.textContent = 'Log in as admin first (box 2 above).';
+      return;
+    }
+    out.textContent = 'Loading...';
+    try {
+      const res = await fetch(`${API_BASE}/api/admins`, {
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+      out.textContent = 'Error: ' + e.message;
+    }
+  }
+
   async function createOfficer() {
     const out = document.getElementById('createOfficerOut');
     if (!adminToken) {
@@ -285,6 +413,7 @@
       name: document.getElementById('offName').value,
       designation: document.getElementById('offDesignation').value,
       district: document.getElementById('offDistrict').value,
+      subdivision: document.getElementById('offSubdivision').value,
       block: document.getElementById('offBlock').value,
       email: document.getElementById('offEmail').value,
       username: document.getElementById('offUsername').value,
