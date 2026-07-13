@@ -28,7 +28,9 @@ router.get('/', async (req, res) => {
 
   try {
     const result = await pool.query(query, params);
-    res.json(result.rows);
+    const creatorCtx = { admin_level: req.user.adminLevel, district: req.user.district, subdivision: req.user.subdivision, block: req.user.block };
+    const visible = result.rows.filter((row) => isWithinJurisdiction(creatorCtx, row));
+    res.json(visible);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });

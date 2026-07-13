@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIMS Portal — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="tripura_emblem.png" alt="" onerror="this.style.display='none'">
+      <div>
+        <div class="name">SIMS Portal</div>
+        <div class="sub">West Tripura</div>
+      </div>
+    </div>
+    <nav>
+      <a href="dashboard.html" class="active">Inspections</a>
+      <a href="admins.html" class="admin-only-nav" style="display:none;">Admins</a>
+      <a href="officers.html" class="admin-only-nav" style="display:none;">Officers</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="officer-name" id="sidebarOfficerName">—</div>
+      <div class="officer-role" id="sidebarOfficerRole">—</div>
+      <button id="sidebarLogoutBtn">Sign Out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <h1 class="page-title">Inspections</h1>
+    <p class="page-subtitle">All inspections submitted from the field, across every officer.</p>
+
+    <div class="stats-row" id="statsRow">
+      <div class="card stat-card" style="background:#E3ECFB;">
+        <div class="stat-value" style="color:var(--gov-blue);" id="statTotal">—</div>
+        <div class="stat-label">Total Inspections</div>
+      </div>
+      <div class="card stat-card" style="background:var(--gov-green-bg);">
+        <div class="stat-value" style="color:var(--gov-green);" id="statThisMonth">—</div>
+        <div class="stat-label">This Month</div>
+      </div>
+      <div class="card stat-card" style="background:var(--gov-amber-bg);">
+        <div class="stat-value" style="color:var(--gov-amber);" id="statNeedsAttention">—</div>
+        <div class="stat-label">Graded C or Below</div>
+      </div>
+    </div>
+
+    <div class="filters">
+      <input type="text" id="searchInput" placeholder="Search by school name...">
+      <select id="districtFilter">
+        <option value="">All Districts</option>
+      </select>
+      <select id="blockFilter">
+        <option value="">All Blocks</option>
+      </select>
+    </div>
+
+    <div class="card" style="padding: 0; overflow: hidden;">
+      <div id="listContainer">
+        <div class="empty-state">Loading inspections...</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="portal.js"></script>
+<script>
+  requireLogin();
+  renderSidebarFooter();
+
+  let allInspections = [];
+
+  function renderStats(list) {
+    document.getElementById('statTotal').textContent = list.length;
+
+    const now = new Date();
+    const thisMonthCount = list.filter(i => {
+      const d = new Date(i.uploaded_at);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }).length;
+    document.getElementById('statThisMonth').textContent = thisMonthCount;
+
+    const needsAttention = list.filter(i => ['C', 'D', 'Poor'].includes(i.overall_grade)).length;
+    document.getElementById('statNeedsAttention').textContent = needsAttention;
+  }
+
+  function populateFilterOptions(list) {
+    const districtSel = document.getElementById('districtFilter');
+    const blockSel = document.getElementById('blockFilter');
+    const districts = [...new Set(list.map(i => i.district).filter(Boolean))].sort();
+    districts.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d; opt.textContent = d;
+      districtSel.appendChild(opt);
+    });
+    updateBlockOptions(list, '');
+  }
+
+  function updateBlockOptions(list, selectedDistrict) {
+    const blockSel = document.getElementById('blockFilter');
+    const currentValue = blockSel.value;
+    blockSel.innerHTML = '<option value="">All Blocks</option>';
+    const source = selectedDistrict ? list.filter(i => i.district === selectedDistrict) : list;
+    const blocks = [...new Set(source.map(i => i.block).filter(Boolean))].sort();
+    blocks.forEach(b => {
+      const opt = document.createElement('option');
+      opt.value = b; opt.textContent = b;
+      blockSel.appendChild(opt);
+    });
+    if (blocks.includes(currentValue)) blockSel.value = currentValue;
+  }
+
+  function renderList() {
+    const search = document.getElementById('searchInput').value.trim().toLowerCase();
+    const district = document.getElementById('districtFilter').value;
+    const block = document.getElementById('blockFilter').value;
+
+    const filtered = allInspections.filter(i => {
+      if (search && !i.school_name.toLowerCase().includes(search)) return false;
+      if (district && i.district !== district) return false;
+      if (block && i.block !== block) return false;
+      return true;
+    });
+
+    const container = document.getElementById('listContainer');
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty-state">No inspections match these filters.</div>';
+      return;
+    }
+
+    container.innerHTML = filtered.map(i => `
+      <a class="inspection-row" href="inspection.html?id=${i.id}" style="text-decoration:none; color:inherit;">
+        <div>
+          <div class="school">${escapeHtml(i.school_name)}</div>
+          <div class="meta">${escapeHtml(i.block || '')}, ${escapeHtml(i.district || '')} · ${escapeHtml(i.officer_name || 'Unknown officer')}</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="meta data">${formatDate(i.uploaded_at)}</div>
+        <span class="grade-badge ${gradeClass(i.overall_grade)}">${i.overall_grade || '—'}</span>
+      </a>
+    `).join('');
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  async function loadInspections() {
+    try {
+      allInspections = await apiGet('/api/inspections');
+      renderStats(allInspections);
+      populateFilterOptions(allInspections);
+      renderList();
+    } catch (err) {
+      document.getElementById('listContainer').innerHTML =
+        `<div class="empty-state">Couldn't load inspections: ${err.message}</div>`;
+    }
+  }
+
+  document.getElementById('searchInput').addEventListener('input', renderList);
+  document.getElementById('districtFilter').addEventListener('change', () => {
+    updateBlockOptions(allInspections, document.getElementById('districtFilter').value);
+    renderList();
+  });
+  document.getElementById('blockFilter').addEventListener('change', renderList);
+
+  loadInspections();
+</script>
+</body>
+</html>

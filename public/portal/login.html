@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIMS Portal — Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #EFF3FA 0%, #F5F6FA 100%);
+  }
+  .login-card {
+    width: 100%;
+    max-width: 380px;
+    background: white;
+    border-radius: 16px;
+    padding: 36px 32px;
+    box-shadow: 0 4px 24px rgba(21,55,111,0.10);
+  }
+  .login-brand { text-align: center; margin-bottom: 20px; }
+  .login-brand img { width: 56px; height: 56px; margin-bottom: 10px; }
+  .login-brand h1 { font-size: 17px; margin: 0; color: var(--gov-blue); font-weight: 700; }
+  .login-brand p { font-size: 12px; color: var(--gov-green); margin: 4px 0 0; }
+
+  .role-toggle { display: flex; background: #F0F4FC; border-radius: 10px; padding: 4px; margin-bottom: 22px; }
+  .role-toggle button {
+    flex: 1; border: none; background: transparent; padding: 9px; border-radius: 8px;
+    font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer;
+  }
+  .role-toggle button.active { background: white; color: var(--gov-blue); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary); }
+  .field input {
+    width: 100%;
+    padding: 11px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  .login-btn { width: 100%; justify-content: center; margin-top: 6px; padding: 12px; }
+  .login-error { background: var(--gov-red-bg); color: var(--gov-red); font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; display: none; }
+  .login-hint { text-align: center; font-size: 12px; color: var(--text-secondary); margin-top: 18px; }
+</style>
+</head>
+<body>
+
+<div class="login-card">
+  <div class="login-brand">
+    <img src="tripura_emblem.png" alt="Government of Tripura" onerror="this.style.display='none'">
+    <h1>SCHOOL INSPECTION &amp; MONITORING SYSTEM</h1>
+    <p>Web Portal — District Administration, West Tripura</p>
+  </div>
+
+  <div class="role-toggle">
+    <button type="button" id="tabOfficer" class="active" onclick="switchTab('officer')">Officer Login</button>
+    <button type="button" id="tabAdmin" onclick="switchTab('admin')">Admin Login</button>
+  </div>
+
+  <div class="login-error" id="loginError"></div>
+
+  <form id="officerForm">
+    <div class="field">
+      <label for="officerUsername">Username</label>
+      <input id="officerUsername" type="text" autocomplete="username">
+    </div>
+    <div class="field">
+      <label for="officerPassword">Password</label>
+      <input id="officerPassword" type="password" autocomplete="current-password">
+    </div>
+    <button type="submit" class="btn btn-primary login-btn" id="officerBtn">Sign In</button>
+  </form>
+
+  <form id="adminForm" style="display:none;">
+    <div class="field">
+      <label for="adminEmail">Email</label>
+      <input id="adminEmail" type="email" autocomplete="username">
+    </div>
+    <div class="field">
+      <label for="adminPassword">Password</label>
+      <input id="adminPassword" type="password" autocomplete="current-password">
+    </div>
+    <button type="submit" class="btn btn-primary login-btn" id="adminBtn">Sign In</button>
+  </form>
+
+  <p class="login-hint" id="loginHint">Sign in with the same officer account used on the SIMS mobile app.</p>
+</div>
+
+<script src="portal.js"></script>
+<script>
+  function switchTab(which) {
+    document.getElementById('tabOfficer').classList.toggle('active', which === 'officer');
+    document.getElementById('tabAdmin').classList.toggle('active', which === 'admin');
+    document.getElementById('officerForm').style.display = which === 'officer' ? 'block' : 'none';
+    document.getElementById('adminForm').style.display = which === 'admin' ? 'block' : 'none';
+    document.getElementById('loginHint').textContent = which === 'officer'
+      ? 'Sign in with the same officer account used on the SIMS mobile app.'
+      : 'Sign in with your Admin account (DM, ADM, DEO, SDM, or BDO level).';
+    document.getElementById('loginError').style.display = 'none';
+  }
+
+  document.getElementById('officerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('officerUsername').value.trim();
+    const password = document.getElementById('officerPassword').value;
+    const errorBox = document.getElementById('loginError');
+    const btn = document.getElementById('officerBtn');
+    errorBox.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Signing in...';
+    try {
+      const res = await fetch(`${API_BASE}/api/officer/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Sign in failed.');
+      localStorage.setItem('sims_token', data.token);
+      localStorage.setItem('sims_role', 'officer');
+      localStorage.setItem('sims_profile', JSON.stringify(data.officer));
+      window.location.href = 'dashboard.html';
+    } catch (err) {
+      errorBox.textContent = err.message || 'Couldn\'t reach the server.';
+      errorBox.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  });
+
+  document.getElementById('adminForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('adminEmail').value.trim();
+    const password = document.getElementById('adminPassword').value;
+    const errorBox = document.getElementById('loginError');
+    const btn = document.getElementById('adminBtn');
+    errorBox.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Signing in...';
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Sign in failed.');
+      localStorage.setItem('sims_token', data.token);
+      localStorage.setItem('sims_role', 'admin');
+      localStorage.setItem('sims_profile', JSON.stringify(data.admin));
+      window.location.href = 'dashboard.html';
+    } catch (err) {
+      errorBox.textContent = err.message || 'Couldn\'t reach the server.';
+      errorBox.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  });
+
+  if (getToken()) window.location.href = 'dashboard.html';
+</script>
+</body>
+</html>
