@@ -61,15 +61,15 @@
           </div>
           <div class="field">
             <label>District</label>
-            <input id="fDistrict" placeholder="e.g. West Tripura" required>
+            <select id="fDistrict" required></select>
           </div>
           <div class="field">
             <label>Subdivision</label>
-            <input id="fSubdivision" placeholder="e.g. Sadar Subdivision">
+            <select id="fSubdivision"></select>
           </div>
           <div class="field">
-            <label>Block</label>
-            <input id="fBlock" placeholder="e.g. Jirania RD Block" required>
+            <label>Block / Nagar Panchayat / Municipality</label>
+            <select id="fBlock" required></select>
           </div>
           <div class="field">
             <label>Mobile Number</label>
@@ -136,9 +136,17 @@
 </style>
 
 <script src="portal.js"></script>
+<script src="jurisdictionData.js"></script>
 <script>
   requireAdmin();
   renderSidebarFooter();
+
+  populateSelect(document.getElementById('fDistrict'), DISTRICTS, null, 'Select District');
+  populateSelect(document.getElementById('fSubdivision'), SUBDIVISIONS, null, 'Select Subdivision (if applicable)');
+  populateBlockSelect(document.getElementById('fBlock'), null, null, 'Select Block / Nagar Panchayat / Municipality');
+  document.getElementById('fSubdivision').addEventListener('change', (e) => {
+    populateBlockSelect(document.getElementById('fBlock'), e.target.value, null, 'Select Block / Nagar Panchayat / Municipality');
+  });
 
   let editingId = null;
 
@@ -182,9 +190,9 @@
     document.getElementById('fName').value = officer.name || '';
     document.getElementById('fDesignation').value = officer.designation || '';
     document.getElementById('fDepartment').value = officer.department || '';
-    document.getElementById('fDistrict').value = officer.district || '';
-    document.getElementById('fSubdivision').value = officer.subdivision || '';
-    document.getElementById('fBlock').value = officer.block || '';
+    populateSelect(document.getElementById('fDistrict'), DISTRICTS, officer.district, 'Select District');
+    populateSelect(document.getElementById('fSubdivision'), SUBDIVISIONS, officer.subdivision, 'Select Subdivision (if applicable)');
+    populateBlockSelect(document.getElementById('fBlock'), officer.subdivision, officer.block, 'Select Block / Nagar Panchayat / Municipality');
     document.getElementById('fMobile').value = officer.mobile_number || '';
     document.getElementById('fEmail').value = officer.email || '';
     document.getElementById('fOffice').value = officer.office || '';
@@ -200,6 +208,9 @@
     editingId = null;
     document.getElementById('formTitle').textContent = 'Create a New Officer';
     document.getElementById('createOfficerForm').reset();
+    populateSelect(document.getElementById('fDistrict'), DISTRICTS, null, 'Select District');
+    populateSelect(document.getElementById('fSubdivision'), SUBDIVISIONS, null, 'Select Subdivision (if applicable)');
+    populateBlockSelect(document.getElementById('fBlock'), null, null, 'Select Block / Nagar Panchayat / Municipality');
     document.getElementById('fOfficerId').disabled = false;
     document.getElementById('passwordLabel').textContent = 'Password (for app login)';
     document.getElementById('createBtn').textContent = 'Create Officer Account';

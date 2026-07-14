@@ -188,11 +188,11 @@
     <label>Designation</label>
     <input id="offDesignation" placeholder="Block Development Officer">
     <label>District</label>
-    <input id="offDistrict" placeholder="West Tripura">
+    <select id="offDistrict"></select>
     <label>Subdivision (optional, but needed if an SDM-level admin created this)</label>
-    <input id="offSubdivision" placeholder="e.g. Sadar Subdivision">
-    <label>Block</label>
-    <input id="offBlock" placeholder="Jirania RD Block">
+    <select id="offSubdivision"></select>
+    <label>Block / Nagar Panchayat / Municipality</label>
+    <select id="offBlock"></select>
     <label>Email</label>
     <input id="offEmail" type="email" placeholder="officer@example.com">
     <label>Username (for app login)</label>
@@ -228,9 +228,11 @@
     <label>Category</label>
     <input id="schoolCategory" placeholder="High School">
     <label>District</label>
-    <input id="schoolDistrict" placeholder="West Tripura">
-    <label>Block</label>
-    <input id="schoolBlock" placeholder="Jirania RD Block">
+    <select id="schoolDistrict"></select>
+    <label>Subdivision</label>
+    <select id="schoolSubdivision"></select>
+    <label>Block / Nagar Panchayat / Municipality</label>
+    <select id="schoolBlock"></select>
     <button onclick="createSchool()">Add School</button>
     <pre id="createSchoolOut">—</pre>
   </div>
@@ -258,6 +260,7 @@
 
 </div>
 
+<script src="portal/jurisdictionData.js"></script>
 <script>
   // If you deploy this alongside the API on the same Render service, leave
   // this as an empty string (relative URLs). If you ever host the test
@@ -475,6 +478,7 @@
       name: document.getElementById('schoolName').value,
       category: document.getElementById('schoolCategory').value,
       district: document.getElementById('schoolDistrict').value,
+      subdivision: document.getElementById('schoolSubdivision').value,
       block: document.getElementById('schoolBlock').value
     };
     out.textContent = 'Creating...';
@@ -567,6 +571,19 @@
     }
   }
 
+  populateSelect(document.getElementById('offDistrict'), DISTRICTS, null, 'Select District');
+  populateSelect(document.getElementById('offSubdivision'), SUBDIVISIONS, null, 'Select Subdivision (optional)');
+  populateBlockSelect(document.getElementById('offBlock'), null, null, 'Select Block / Nagar Panchayat / Municipality');
+  document.getElementById('offSubdivision').addEventListener('change', (e) => {
+    populateBlockSelect(document.getElementById('offBlock'), e.target.value, null, 'Select Block / Nagar Panchayat / Municipality');
+  });
+
+  populateSelect(document.getElementById('schoolDistrict'), DISTRICTS, null, 'Select District');
+  populateSelect(document.getElementById('schoolSubdivision'), SUBDIVISIONS, null, 'Select Subdivision');
+  populateBlockSelect(document.getElementById('schoolBlock'), null, null, 'Select Block / Nagar Panchayat / Municipality');
+  document.getElementById('schoolSubdivision').addEventListener('change', (e) => {
+    populateBlockSelect(document.getElementById('schoolBlock'), e.target.value, null, 'Select Block / Nagar Panchayat / Municipality');
+  });
   checkHealth();
 </script>
 

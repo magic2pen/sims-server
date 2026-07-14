@@ -61,15 +61,15 @@
           </div>
           <div class="field">
             <label>District</label>
-            <input id="fDistrict" placeholder="e.g. West Tripura" required>
+            <select id="fDistrict" required></select>
           </div>
           <div class="field">
             <label>Subdivision (required for SDM / Addl. SDM)</label>
-            <input id="fSubdivision" placeholder="e.g. Sadar Subdivision">
+            <select id="fSubdivision"></select>
           </div>
           <div class="field">
-            <label>Block (required for BDO)</label>
-            <input id="fBlock" placeholder="e.g. Jirania RD Block">
+            <label>Block / Nagar Panchayat / Municipality (required for BDO)</label>
+            <select id="fBlock"></select>
           </div>
         </div>
         <button type="submit" class="btn btn-primary" id="createBtn">Create Admin Account</button>
@@ -116,9 +116,17 @@
 </style>
 
 <script src="portal.js"></script>
+<script src="jurisdictionData.js"></script>
 <script>
   requireAdmin();
   renderSidebarFooter();
+
+  populateSelect(document.getElementById('fDistrict'), DISTRICTS, null, 'Select District');
+  populateSelect(document.getElementById('fSubdivision'), SUBDIVISIONS, null, 'Not applicable / Select Subdivision');
+  populateBlockSelect(document.getElementById('fBlock'), null, null, 'Not applicable / Select Block / Nagar Panchayat / Municipality');
+  document.getElementById('fSubdivision').addEventListener('change', (e) => {
+    populateBlockSelect(document.getElementById('fBlock'), e.target.value, null, 'Not applicable / Select Block / Nagar Panchayat / Municipality');
+  });
 
   let editingId = null;
   let allDesignationOptions = [];
@@ -181,9 +189,9 @@
     document.getElementById('fEmail').value = admin.email;
     document.getElementById('fPassword').value = '';
     document.getElementById('passwordLabel').textContent = 'New Password (leave blank to keep unchanged)';
-    document.getElementById('fDistrict').value = admin.district || '';
-    document.getElementById('fSubdivision').value = admin.subdivision || '';
-    document.getElementById('fBlock').value = admin.block || '';
+    populateSelect(document.getElementById('fDistrict'), DISTRICTS, admin.district, 'Select District');
+    populateSelect(document.getElementById('fSubdivision'), SUBDIVISIONS, admin.subdivision, 'Not applicable / Select Subdivision');
+    populateBlockSelect(document.getElementById('fBlock'), admin.subdivision, admin.block, 'Not applicable / Select Block / Nagar Panchayat / Municipality');
     renderDesignationOptions(admin.designation);
     document.getElementById('createBtn').textContent = 'Save Changes';
     document.getElementById('cancelEditBtn').style.display = 'inline-block';
@@ -194,6 +202,9 @@
     editingId = null;
     document.getElementById('formTitle').textContent = 'Create a New Admin';
     document.getElementById('createAdminForm').reset();
+    populateSelect(document.getElementById('fDistrict'), DISTRICTS, null, 'Select District');
+    populateSelect(document.getElementById('fSubdivision'), SUBDIVISIONS, null, 'Not applicable / Select Subdivision');
+    populateBlockSelect(document.getElementById('fBlock'), null, null, 'Not applicable / Select Block / Nagar Panchayat / Municipality');
     document.getElementById('passwordLabel').textContent = 'Password';
     renderDesignationOptions();
     document.getElementById('createBtn').textContent = 'Create Admin Account';

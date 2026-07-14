@@ -57,15 +57,15 @@
         </div>
         <div class="field">
           <label>District</label>
-          <input id="fDistrict" placeholder="e.g. West Tripura">
+          <select id="fDistrict"></select>
         </div>
         <div class="field">
           <label>Subdivision (only if you're SDM-level)</label>
-          <input id="fSubdivision" placeholder="Leave blank if District-level">
+          <select id="fSubdivision"></select>
         </div>
         <div class="field">
-          <label>Block (only if you're BDO-level)</label>
-          <input id="fBlock" placeholder="Leave blank if District/Subdivision-level">
+          <label>Block / Nagar Panchayat / Municipality (only if you're BDO-level)</label>
+          <select id="fBlock"></select>
         </div>
         <button type="submit" class="btn btn-primary" id="saveBtn">Save Changes</button>
       </form>
@@ -85,6 +85,7 @@
 </style>
 
 <script src="portal.js"></script>
+<script src="jurisdictionData.js"></script>
 <script>
   requireAdmin();
   renderSidebarFooter();
@@ -95,9 +96,12 @@
     document.getElementById('fName').value = profile.name || '';
     document.getElementById('fEmail').value = profile.email || '';
     document.getElementById('fDesignation').value = profile.designation || '';
-    document.getElementById('fDistrict').value = profile.district || '';
-    document.getElementById('fSubdivision').value = profile.subdivision || '';
-    document.getElementById('fBlock').value = profile.block || '';
+    populateSelect(document.getElementById('fDistrict'), DISTRICTS, profile.district, 'Not applicable / Select District');
+    populateSelect(document.getElementById('fSubdivision'), SUBDIVISIONS, profile.subdivision, 'Not applicable / Select Subdivision');
+    populateBlockSelect(document.getElementById('fBlock'), profile.subdivision, profile.block, 'Not applicable / Select Block / Nagar Panchayat / Municipality');
+    document.getElementById('fSubdivision').addEventListener('change', (e) => {
+      populateBlockSelect(document.getElementById('fBlock'), e.target.value, null, 'Not applicable / Select Block / Nagar Panchayat / Municipality');
+    });
   }
 
   document.getElementById('profileForm').addEventListener('submit', async (e) => {
