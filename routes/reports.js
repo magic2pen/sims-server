@@ -209,21 +209,99 @@ router.get('/teacher-attendance', requireAuth('admin'), async (req, res) => {
 // ====================================================================
 // STUDENT ATTENDANCE
 // ====================================================================
+const CLASS_ORDER = ['Pre-Primary', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+
+function classSortIndex(label) {
+  const i = CLASS_ORDER.indexOf(label);
+  return i === -1 ? 999 : i;
+}
+
+// Extracts totals AND keeps the per-class, per-gender breakdown — this is
+// what was being collected all along but never actually surfaced.
 function extractStudentAttendance(answers) {
   let totalEnr = 0;
   let totalPres = 0;
+  let boysEnr = 0;
+  let boysPres = 0;
+  let girlsEnr = 0;
+  let girlsPres = 0;
+  const byClass = {};
+
   Object.keys(answers).forEach((key) => {
     const match = key.match(/^cls(.+)_enrB$/);
     if (!match) return;
     const label = match[1];
     const v = (id) => parseInt(answers[id] && answers[id].value, 10) || 0;
-    totalEnr += v(`cls${label}_enrB`) + v(`cls${label}_enrG`);
-    totalPres += v(`cls${label}_presB`) + v(`cls${label}_presG`);
+    const enrB = v(`cls${label}_enrB`);
+    const enrG = v(`cls${label}_enrG`);
+    const presB = v(`cls${label}_presB`);
+    const presG = v(`cls${label}_presG`);
+
+    totalEnr += enrB + enrG;
+    totalPres += presB + presG;
+    boysEnr += enrB;
+    boysPres += presB;
+    girlsEnr += enrG;
+    girlsPres += presG;
+    byClass[label] = { enrB, enrG, presB, presG };
   });
-  return { totalEnr, totalPres, percent: totalEnr > 0 ? Math.round((totalPres / totalEnr) * 100) : null };
+
+  return {
+    totalEnr, totalPres, boysEnr, boysPres, girlsEnr, girlsPres, byClass,
+    percent: totalEnr > 0 ? Math.round((totalPres / totalEnr) * 100) : null
+  };
 }
 
-// GET /api/reports/student-attendance?block=X — same overview/detail pattern as teacher attendance.
+// Sums the per-class, per-gender breakdown across every inspection in a
+// block (or school), so a "Class V attendance" or "girls vs boys" figure
+// reflects the whole block, not just one school.
+function aggregateStudentDetail(blockRows) {
+  let totalEnr = 0, totalPres = 0, boysEnr = 0, boysPres = 0, girlsEnr = 0, girlsPres = 0;
+  const classAgg = {};
+
+  blockRows.forEach((r) => {
+    totalEnr += r.sa.totalEnr;
+    totalPres += r.sa.totalPres;
+    boysEnr += r.sa.boysEnr;
+    boysPres += r.sa.boysPres;
+    girlsEnr += r.sa.girlsEnr;
+    girlsPres += r.sa.girlsPres;
+    Object.entries(r.sa.byClass).forEach(([label, c]) => {
+      if (!classAgg[label]) classAgg[label] = { enrB: 0, enrG: 0, presB: 0, presG: 0 };
+      classAgg[label].enrB += c.enrB;
+      classAgg[label].enrG += c.enrG;
+      classAgg[label].presB += c.presB;
+      classAgg[label].presG += c.presG;
+    });
+  });
+
+  const classBreakdown = Object.keys(classAgg)
+    .sort((a, b) => classSortIndex(a) - classSortIndex(b))
+    .map((label) => {
+      const c = classAgg[label];
+      const enr = c.enrB + c.enrG;
+      const pres = c.presB + c.presG;
+      return {
+        classLabel: label,
+        enrolledBoys: c.enrB, enrolledGirls: c.enrG,
+        presentBoys: c.presB, presentGirls: c.presG,
+        boysPercent: c.enrB > 0 ? Math.round((c.presB / c.enrB) * 100) : null,
+        girlsPercent: c.enrG > 0 ? Math.round((c.presG / c.enrG) * 100) : null,
+        overallPercent: enr > 0 ? Math.round((pres / enr) * 100) : null
+      };
+    });
+
+  return {
+    totalEnrolled: totalEnr,
+    totalPresent: totalPres,
+    avgAttendancePercent: totalEnr > 0 ? Math.round((totalPres / totalEnr) * 100) : null,
+    boysEnrolled: boysEnr, boysPresent: boysPres, boysPercent: boysEnr > 0 ? Math.round((boysPres / boysEnr) * 100) : null,
+    girlsEnrolled: girlsEnr, girlsPresent: girlsPres, girlsPercent: girlsEnr > 0 ? Math.round((girlsPres / girlsEnr) * 100) : null,
+    classBreakdown
+  };
+}
+
+// GET /api/reports/student-attendance?block=X
 router.get('/student-attendance', requireAuth('admin'), async (req, res) => {
   try {
     const rows = await getScopedInspections(req);
@@ -251,12 +329,17 @@ router.get('/student-attendance', requireAuth('admin'), async (req, res) => {
     }
 
     const blockRows = enriched.filter((r) => r.block === block);
-    const schools = blockRows
-      .map((r) => ({ schoolId: r.school_id, schoolName: r.school_name, attendancePercent: r.sa.percent, totalEnrolled: r.sa.totalEnr, totalPresent: r.sa.totalPres, uploadedAt: r.uploaded_at }))
-      .sort((a, b) => (b.attendancePercent ?? -1) - (a.attendancePercent ?? -1));
+    const detail = aggregateStudentDetail(blockRows);
 
-    const validPercents = blockRows.map((r) => r.sa.percent).filter((p) => p !== null);
-    const avgAttendancePercent = validPercents.length > 0 ? Math.round(validPercents.reduce((a, b) => a + b, 0) / validPercents.length) : null;
+    const schools = blockRows
+      .map((r) => ({
+        schoolId: r.school_id, schoolName: r.school_name,
+        attendancePercent: r.sa.percent, totalEnrolled: r.sa.totalEnr, totalPresent: r.sa.totalPres,
+        boysPercent: r.sa.boysEnr > 0 ? Math.round((r.sa.boysPres / r.sa.boysEnr) * 100) : null,
+        girlsPercent: r.sa.girlsEnr > 0 ? Math.round((r.sa.girlsPres / r.sa.girlsEnr) * 100) : null,
+        uploadedAt: r.uploaded_at
+      }))
+      .sort((a, b) => (b.attendancePercent ?? -1) - (a.attendancePercent ?? -1));
 
     const monthlyMap = {};
     blockRows.forEach((r) => {
@@ -266,7 +349,7 @@ router.get('/student-attendance', requireAuth('admin'), async (req, res) => {
     });
     const trend = Object.keys(monthlyMap).sort().map((k) => ({ month: k, avgAttendancePercent: monthlyMap[k].count > 0 ? Math.round(monthlyMap[k].sum / monthlyMap[k].count) : null }));
 
-    res.json({ mode: 'detail', block, totalInspections: blockRows.length, avgAttendancePercent, schools, trend });
+    res.json({ mode: 'detail', block, totalInspections: blockRows.length, ...detail, schools, trend });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error generating student attendance report', detail: err.message });
