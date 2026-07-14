@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIMS Portal — Academic Performance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="tripura_emblem.png" alt="" onerror="this.style.display='none'">
+      <div><div class="name">SIMS Portal</div><div class="sub">West Tripura</div></div>
+    </div>
+    <nav>
+      <a href="dashboard.html">Inspections</a>
+      <a href="reports.html" class="admin-only-nav active" style="display:none;">Reports</a>
+      <a href="assignments.html" class="admin-only-nav" style="display:none;">Assignments</a>
+      <a href="admins.html" class="admin-only-nav" style="display:none;">Admins</a>
+      <a href="officers.html" class="admin-only-nav" style="display:none;">Officers</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="officer-name" id="sidebarOfficerName">—</div>
+      <div class="officer-role" id="sidebarOfficerRole">—</div>
+      <button id="sidebarLogoutBtn">Sign Out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <a href="reports.html" class="back-link-btn">&larr; Back to Reports</a>
+    <h1 class="page-title">📖 Academic Performance</h1>
+    <p class="page-subtitle">Reading, writing, and math ability, by Block.</p>
+    <div id="content"><div class="empty-state">Loading...</div></div>
+  </main>
+</div>
+
+<style>
+  .back-link-btn { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; margin-bottom:14px; cursor:pointer; color: var(--gov-blue); background:none; border:none; font-family: inherit; padding:0; text-decoration:none; }
+  .chart-card { background: var(--card); border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 20px; }
+  .chart-card h3 { font-size: 14px; margin: 0 0 4px; }
+  .chart-card .chart-note { font-size: 12px; color: var(--text-secondary); margin: 0 0 14px; }
+  .overview-row { display: grid; grid-template-columns: 1.2fr 0.8fr 1fr; gap: 10px; padding: 13px 16px; border-bottom: 1px solid var(--border); font-size: 13px; align-items: center; cursor: pointer; }
+  .overview-row:hover { background: #FAFBFF; }
+  .overview-row.header { font-weight: 700; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; background: #FAFBFF; cursor: default; }
+  .overview-row.header:hover { background: #FAFBFF; }
+  .pct-badge { font-family: 'IBM Plex Mono', monospace; font-weight: 700; padding: 3px 10px; border-radius: 20px; display:inline-block; }
+  .pct-good { background: var(--gov-green-bg); color: var(--gov-green); }
+  .pct-mid { background: var(--gov-amber-bg); color: var(--gov-amber); }
+  .pct-bad { background: var(--gov-red-bg); color: var(--gov-red); }
+  .school-row { display: grid; grid-template-columns: 0.4fr 1.4fr 1fr 1.3fr; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; align-items: center; }
+  .school-row.header { font-weight: 700; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; background: #FAFBFF; }
+  .rank-badge { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; background: #F0F0F0; color: var(--text-secondary); }
+  .rank-badge.top { background: var(--gov-green-bg); color: var(--gov-green); }
+  .rank-badge.bottom { background: var(--gov-red-bg); color: var(--gov-red); }
+  .detail-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 14px; margin-bottom: 20px; }
+</style>
+
+<script src="portal.js"></script>
+<script>
+  requireAdmin();
+  renderSidebarFooter();
+  if (typeof Chart === 'undefined') {
+    document.getElementById('content').innerHTML = '<div class="empty-state">The charting library did not load. Refresh the page.</div>';
+    throw new Error('Chart.js failed to load');
+  }
+
+  const ENDPOINT = '/api/reports/academic-performance';
+  let currentBlock = null;
+  let charts = {};
+
+  function pctClass(pct) {
+    if (pct === null || pct === undefined) return 'pct-mid';
+    if (pct >= 80) return 'pct-good';
+    if (pct >= 50) return 'pct-mid';
+    return 'pct-bad';
+  }
+
+  async function render() {
+    if (currentBlock) await renderDetail(currentBlock);
+    else await renderOverview();
+  }
+
+  async function renderOverview() {
+    const container = document.getElementById('content');
+    container.innerHTML = '<div class="empty-state">Loading...</div>';
+    try {
+      const data = await apiGet(ENDPOINT);
+      if (data.blocks.length === 0) {
+        container.innerHTML = '<div class="empty-state">No inspections with academic performance data yet.</div>';
+        return;
+      }
+      const header = `<div class="overview-row header"><div>Block</div><div>Inspections</div><div>Avg Rating</div></div>`;
+      const rows = data.blocks.map((b) => `
+        <div class="overview-row" onclick="openBlock('${b.block.replace(/'/g, "\\'")}')">
+          <div><strong>${escapeHtml(b.block)}</strong><div style="font-size:11px;color:var(--text-secondary);">${escapeHtml(b.district || '')}</div></div>
+          <div>${b.inspectionCount}</div>
+          <div><span class="pct-badge ${pctClass((b.avgScore / 4) * 100)}">${b.avgLabel} (${b.avgScore})</span></div>
+        </div>`).join('');
+
+      container.innerHTML = `
+        <div class="chart-card"><canvas id="overviewChart" style="max-height:280px;"></canvas></div>
+        <div class="chart-card" style="padding:0; overflow:hidden;">${header}${rows}</div>`;
+
+      if (charts.overview) charts.overview.destroy();
+      const colors = data.blocks.map((b) => pctClass((b.avgScore / 4) * 100) === 'pct-good' ? '#1E8A4C' : pctClass((b.avgScore / 4) * 100) === 'pct-mid' ? '#B8860B' : '#D32F2F');
+      charts.overview = new Chart(document.getElementById('overviewChart'), {
+        type: 'bar',
+        data: { labels: data.blocks.map((b) => b.block), datasets: [{ label: 'Avg Rating', data: data.blocks.map((b) => b.avgScore), backgroundColor: colors }] },
+        options: { indexAxis: 'y', scales: { x: { min: 0, max: 4 } }, plugins: { legend: { display: false } } }
+      });
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state">Couldn't load report: ${err.message}</div>`;
+    }
+  }
+
+  function openBlock(block) { currentBlock = block; render(); }
+  function closeBlock() { currentBlock = null; render(); }
+
+  async function renderDetail(block) {
+    const container = document.getElementById('content');
+    container.innerHTML = '<div class="empty-state">Loading...</div>';
+    try {
+      const data = await apiGet(`${ENDPOINT}?block=${encodeURIComponent(block)}`);
+      const c1 = data.avgScore >= 3 ? 'var(--gov-green-bg)' : data.avgScore >= 2 ? 'var(--gov-amber-bg)' : 'var(--gov-red-bg)';
+      const c1t = data.avgScore >= 3 ? 'var(--gov-green)' : data.avgScore >= 2 ? 'var(--gov-amber)' : 'var(--gov-red)';
+
+      const statsHtml = `
+        <div class="chart-card" style="background:#E3ECFB;"><div style="font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:700;color:var(--gov-blue);">${data.totalInspections}</div><div style="font-size:12px;color:var(--text-secondary);">Inspections</div></div>
+        <div class="chart-card" style="background:${c1};"><div style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:700;color:${c1t};">${data.avgLabel || '—'}</div><div style="font-size:12px;color:var(--text-secondary);">Avg Rating (${data.avgScore ?? '—'}/4)</div></div>
+        <div class="chart-card" style="background:#F0F0F0;"><div style="font-size:14px;font-weight:600;">R ${data.skillBreakdown.reading ?? '—'} · W ${data.skillBreakdown.writing ?? '—'} · M ${data.skillBreakdown.math ?? '—'}</div><div style="font-size:12px;color:var(--text-secondary);">Skill Breakdown (out of 4)</div></div>`;
+
+      const schoolRows = data.schools.map((s, i) => {
+        const rank = i + 1;
+        const isTop = rank <= 3 && data.schools.length > 3;
+        const isBottom = rank > data.schools.length - 3 && data.schools.length > 3;
+        return `
+          <div class="school-row">
+            <div><span class="rank-badge ${isTop ? 'top' : isBottom ? 'bottom' : ''}">${rank}</span></div>
+            <div>${escapeHtml(s.schoolName)}</div>
+            <div><span class="pct-badge ${pctClass((s.score / 4) * 100)}">${s.label} (${s.score})</span></div>
+            <div style="font-size:12px;color:var(--text-secondary);">R: ${s.reading ?? '—'} · W: ${s.writing ?? '—'} · M: ${s.math ?? '—'}</div>
+          </div>`;
+      }).join('');
+
+      container.innerHTML = `
+        <button class="back-link-btn" onclick="closeBlock()" style="margin-bottom:14px;">&larr; Back to all blocks</button>
+        <h2 style="font-size:17px;margin:0 0 4px;">${escapeHtml(block)}</h2>
+        <p style="font-size:13px;color:var(--text-secondary);margin:0 0 16px;">Schools ranked best to worst, and the trend over time for this block.</p>
+        <div class="detail-stats">${statsHtml}</div>
+        <div class="chart-card"><h3>Trend Over Time</h3><p class="chart-note">Avg Score (out of 4), by month.</p><canvas id="trendChart" style="max-height:260px;"></canvas></div>
+        <h3 style="font-size:14px;margin:0 0 12px;">Schools — Best to Worst</h3>
+        <div class="chart-card" style="padding:0; overflow:hidden;">
+          <div class="school-row header"><div>#</div><div>School</div><div>Rating</div><div>Skill Breakdown</div></div>
+          ${schoolRows || '<div class="empty-state">No schools yet.</div>'}
+        </div>`;
+
+      if (charts.trend) charts.trend.destroy();
+      charts.trend = new Chart(document.getElementById('trendChart'), {
+        type: 'line',
+        data: { labels: data.trend.map((t) => t.month), datasets: [{ label: 'Avg Score', data: data.trend.map((t) => t.avgScore), borderColor: '#1E4FA3', backgroundColor: '#1E4FA3', tension: 0.2 }] },
+        options: { scales: { y: { min: 0, max: 4 } } }
+      });
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state">Couldn't load detail: ${err.message}</div>`;
+    }
+  }
+
+  render();
+</script>
+</body>
+</html>

@@ -362,4 +362,155 @@ router.get('/academic-performance', requireAuth('admin'), async (req, res) => {
   }
 });
 
+// ====================================================================
+// INFRASTRUCTURE
+// ====================================================================
+// Each condition field uses a different answer scale — map each to a
+// 0-100 score so they can be combined/compared/plotted on one radar.
+const CONDITION_SCALES = {
+  infra_boundary_wall: { Good: 100, Average: 60, Poor: 25, Absent: 0 },
+  infra_building_condition: { Excellent: 100, Good: 70, Fair: 40, Poor: 10 },
+  infra_roof_condition: { Excellent: 100, Good: 70, Fair: 40, Poor: 10 },
+  infra_ceiling_condition: { Good: 100, Fair: 55, Poor: 15 } // "Not Applicable" excluded from scoring
+};
+const CONDITION_LABELS = {
+  infra_boundary_wall: 'Boundary Wall',
+  infra_building_condition: 'Building Condition',
+  infra_roof_condition: 'Roof Condition',
+  infra_ceiling_condition: 'Ceiling Condition'
+};
+
+const UTILITY_INDICATORS = [
+  { id: 'infra_electricity_available', label: 'Electricity' },
+  { id: 'infra_drinking_water_available', label: 'Drinking Water' },
+  { id: 'infra_toilets_functional', label: 'Toilets Functional' },
+  { id: 'infra_separate_toilets', label: 'Separate Toilets' },
+  { id: 'infra_handwashing', label: 'Handwashing' },
+  { id: 'infra_ramp_available', label: 'Ramp (Accessibility)' }
+];
+const FACILITY_INDICATORS = [
+  { id: 'infra_library_available', label: 'Library' },
+  { id: 'infra_science_lab_available', label: 'Science Lab' },
+  { id: 'infra_sports_equipment_available', label: 'Sports Equipment' },
+  { id: 'infra_playground_available', label: 'Playground' }
+];
+
+function yesNoValue(answers, id) {
+  const v = answers[id] && answers[id].value;
+  if (v === 'Yes') return true;
+  if (v === 'No') return false;
+  return null;
+}
+
+function extractInfrastructure(answers) {
+  const conditionScores = {};
+  Object.keys(CONDITION_SCALES).forEach((id) => {
+    const v = answers[id] && answers[id].value;
+    const map = CONDITION_SCALES[id];
+    if (v && map[v] !== undefined) conditionScores[id] = map[v];
+  });
+
+  const utilities = {};
+  UTILITY_INDICATORS.forEach((u) => { utilities[u.id] = yesNoValue(answers, u.id); });
+  const facilities = {};
+  FACILITY_INDICATORS.forEach((f) => { facilities[f.id] = yesNoValue(answers, f.id); });
+
+  const roofLeak = yesNoValue(answers, 'infra_roof_leakage');
+  const fansInstalled = parseInt(answers['infra_fans_working'] && answers['infra_fans_working'].value, 10) || 0;
+  const fansWorking = parseInt(answers['infra_fans_working'] && answers['infra_fans_working'].value2, 10) || 0;
+  const lightsInstalled = parseInt(answers['infra_lights_working'] && answers['infra_lights_working'].value, 10) || 0;
+  const lightsWorking = parseInt(answers['infra_lights_working'] && answers['infra_lights_working'].value2, 10) || 0;
+  const waterQuality = answers['infra_water_quality'] && answers['infra_water_quality'].value;
+  const buildingType = answers['infra_building_type'] && answers['infra_building_type'].value;
+
+  const scoreValues = [];
+  Object.values(conditionScores).forEach((v) => scoreValues.push(v));
+  Object.values(utilities).forEach((v) => { if (v !== null) scoreValues.push(v ? 100 : 0); });
+  Object.values(facilities).forEach((v) => { if (v !== null) scoreValues.push(v ? 100 : 0); });
+  const healthScore = scoreValues.length > 0 ? Math.round(scoreValues.reduce((a, b) => a + b, 0) / scoreValues.length) : null;
+
+  return { conditionScores, utilities, facilities, roofLeak, fansInstalled, fansWorking, lightsInstalled, lightsWorking, waterQuality, buildingType, healthScore };
+}
+
+function aggregateInfrastructure(infraRows) {
+  const withScore = infraRows.filter((r) => r.infra.healthScore !== null);
+  const overallHealthScore = withScore.length > 0 ? Math.round(withScore.reduce((sum, r) => sum + r.infra.healthScore, 0) / withScore.length) : null;
+
+  const conditionRadar = {};
+  Object.keys(CONDITION_LABELS).forEach((id) => {
+    const vals = infraRows.map((r) => r.infra.conditionScores[id]).filter((v) => v !== undefined);
+    conditionRadar[id] = { label: CONDITION_LABELS[id], score: vals.length > 0 ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null };
+  });
+
+  const buildIndicatorList = (list, key) => list.map((ind) => {
+    const vals = infraRows.map((r) => r.infra[key][ind.id]).filter((v) => v !== null);
+    return { id: ind.id, label: ind.label, answered: vals.length, goodPercent: vals.length > 0 ? Math.round((vals.filter((v) => v).length / vals.length) * 100) : null };
+  });
+  const utilityIndicators = buildIndicatorList(UTILITY_INDICATORS, 'utilities');
+  const facilityIndicators = buildIndicatorList(FACILITY_INDICATORS, 'facilities');
+
+  const roofAnswered = infraRows.map((r) => r.infra.roofLeak).filter((v) => v !== null);
+  const roofLeakCount = roofAnswered.filter((v) => v === true).length;
+  const roofLeakage = { count: roofLeakCount, total: roofAnswered.length, percent: roofAnswered.length > 0 ? Math.round((roofLeakCount / roofAnswered.length) * 100) : null };
+
+  const sumField = (field) => infraRows.reduce((sum, r) => sum + r.infra[field], 0);
+  const fansInstalled = sumField('fansInstalled');
+  const fansWorking = sumField('fansWorking');
+  const lightsInstalled = sumField('lightsInstalled');
+  const lightsWorking = sumField('lightsWorking');
+  const electricalFixtures = {
+    fansInstalled, fansWorking, fansPercent: fansInstalled > 0 ? Math.round((fansWorking / fansInstalled) * 100) : null,
+    lightsInstalled, lightsWorking, lightsPercent: lightsInstalled > 0 ? Math.round((lightsWorking / lightsInstalled) * 100) : null
+  };
+
+  const waterQuality = { Good: 0, Average: 0, Poor: 0 };
+  infraRows.forEach((r) => { if (r.infra.waterQuality && waterQuality[r.infra.waterQuality] !== undefined) waterQuality[r.infra.waterQuality]++; });
+
+  const buildingTypeDistribution = {};
+  infraRows.forEach((r) => {
+    const t = r.infra.buildingType;
+    if (t) buildingTypeDistribution[t] = (buildingTypeDistribution[t] || 0) + 1;
+  });
+
+  return { totalInspections: infraRows.length, overallHealthScore, conditionRadar, utilityIndicators, facilityIndicators, roofLeakage, electricalFixtures, waterQuality, buildingTypeDistribution };
+}
+
+// GET /api/reports/infrastructure?block=X
+router.get('/infrastructure', requireAuth('admin'), async (req, res) => {
+  try {
+    const rows = await getScopedInspections(req);
+    const infraRows = rows
+      .map((r) => ({ ...r, infra: extractInfrastructure(parseAnswers(r.answers_json)) }))
+      .filter((r) => r.infra.healthScore !== null);
+
+    const { block } = req.query;
+
+    if (!block) {
+      const blockMap = {};
+      infraRows.forEach((r) => {
+        const key = r.block || 'Unknown Block';
+        if (!blockMap[key]) blockMap[key] = [];
+        blockMap[key].push(r);
+      });
+      const blocks = Object.entries(blockMap).map(([blockName, blockRows]) => {
+        const agg = aggregateInfrastructure(blockRows);
+        return { block: blockName, district: blockRows[0].district, inspectionCount: blockRows.length, healthScore: agg.overallHealthScore };
+      }).sort((a, b) => (a.healthScore ?? 999) - (b.healthScore ?? 999));
+
+      const overall = aggregateInfrastructure(infraRows);
+      return res.json({ mode: 'overview', ...overall, blocks });
+    }
+
+    const blockRows = infraRows.filter((r) => r.block === block);
+    const agg = aggregateInfrastructure(blockRows);
+    const schools = blockRows.map((r) => ({ schoolId: r.school_id, schoolName: r.school_name, healthScore: r.infra.healthScore, uploadedAt: r.uploaded_at }))
+      .sort((a, b) => (b.healthScore ?? -1) - (a.healthScore ?? -1));
+
+    res.json({ mode: 'detail', block, ...agg, schools });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error generating infrastructure report', detail: err.message });
+  }
+});
+
 module.exports = router;
