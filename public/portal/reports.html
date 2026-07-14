@@ -76,6 +76,12 @@
         <div class="focus-value" id="focusInfraValue">—</div>
         <div class="focus-sub" id="focusInfraSub">Loading...</div>
       </a>
+      <a href="quick-deliverables-report.html" class="focus-card">
+        <div class="focus-icon" style="background:#FDECEA;">🎯</div>
+        <div class="focus-title">Quick Deliverables</div>
+        <div class="focus-value" id="focusDeliverablesValue">—</div>
+        <div class="focus-sub" id="focusDeliverablesSub">Loading...</div>
+      </a>
     </div>
   </main>
 </div>
@@ -322,6 +328,12 @@
   loadFocusCard('/api/reports/infrastructure', 'focusInfraValue', 'focusInfraSub', (data) => {
     document.getElementById('focusInfraValue').textContent = data.overallHealthScore !== null ? data.overallHealthScore + '%' : '—';
     document.getElementById('focusInfraSub').textContent = `Overall health score, ${data.totalInspections} inspection(s)`;
+  });
+
+  loadFocusCard('/api/reports/quick-deliverables', 'focusDeliverablesValue', 'focusDeliverablesSub', (data) => {
+    const flagged = data.deliverables.filter((d) => d.goodPercent !== null && d.goodPercent < 80).length;
+    document.getElementById('focusDeliverablesValue').textContent = flagged;
+    document.getElementById('focusDeliverablesSub').textContent = `Facilit${flagged === 1 ? 'y' : 'ies'} below 80% coverage, ${data.totalSchools} school(s)`;
   });
 
   loadFilterOptions().then(loadReport);

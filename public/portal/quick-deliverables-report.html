@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIMS Portal — Quick Deliverables</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar no-print">
+    <div class="sidebar-brand">
+      <img src="tripura_emblem.png" alt="" onerror="this.style.display='none'">
+      <div><div class="name">SIMS Portal</div><div class="sub">West Tripura</div></div>
+    </div>
+    <nav>
+      <a href="dashboard.html">Inspections</a>
+      <a href="reports.html" class="admin-only-nav" style="display:none;">Reports</a>
+      <a href="assignments.html" class="admin-only-nav" style="display:none;">Assignments</a>
+      <a href="schools.html" class="admin-only-nav" style="display:none;">Schools</a>
+      <a href="admins.html" class="admin-only-nav" style="display:none;">Admins</a>
+      <a href="officers.html" class="admin-only-nav" style="display:none;">Officers</a>
+      <a href="profile.html" class="admin-only-nav" style="display:none;">My Profile</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="officer-name" id="sidebarOfficerName">—</div>
+      <div class="officer-role" id="sidebarOfficerRole">—</div>
+      <button id="sidebarLogoutBtn">Sign Out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <a href="reports.html" class="back-link-btn no-print">&larr; Back to Reports</a>
+
+    <div id="printHeader" class="print-header">
+      <h1>School Facility Deliverables Report</h1>
+      <p>Government of Tripura — District Administration, West Tripura</p>
+      <p id="printScopeLine"></p>
+      <p id="printDateLine"></p>
+      <hr>
+    </div>
+
+    <h1 class="page-title no-print">🎯 Quick Deliverables</h1>
+    <p class="page-subtitle no-print">Which schools have — and don't have — each basic facility. Built to print and hand straight to Panchayats, Urban Local Bodies, and line departments for their development plans.</p>
+
+    <div class="toolbar no-print">
+      <div class="field">
+        <label>Block / Nagar Panchayat / Municipality</label>
+        <select id="blockFilter"><option value="">All (your full jurisdiction)</option></select>
+      </div>
+      <button class="btn btn-primary" id="printAllBtn">🖨️ Print Full Report</button>
+    </div>
+
+    <div id="summaryBar" class="summary-bar no-print"></div>
+
+    <div id="content"><div class="empty-state">Loading...</div></div>
+  </main>
+</div>
+
+<style>
+  .back-link-btn { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; margin-bottom:14px; cursor:pointer; color: var(--gov-blue); background:none; border:none; font-family: inherit; padding:0; text-decoration:none; }
+
+  .toolbar { display: flex; align-items: flex-end; gap: 16px; margin: 18px 0; flex-wrap: wrap; }
+  .toolbar .field label { display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; }
+  .toolbar .field select { padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; min-width: 260px; }
+
+  .summary-bar { background: var(--gov-blue); color: white; border-radius: 12px; padding: 14px 20px; margin-bottom: 20px; font-size: 13px; display: flex; gap: 24px; flex-wrap: wrap; }
+  .summary-bar strong { font-family: 'IBM Plex Mono', monospace; font-size: 16px; }
+
+  .deliverable-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+  .deliverable-card { background: var(--card); border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden; break-inside: avoid; page-break-inside: avoid; }
+  .deliverable-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px; }
+  .deliverable-icon { font-size: 24px; }
+  .deliverable-title { font-size: 14px; font-weight: 700; flex: 1; }
+  .deliverable-ring { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .deliverable-ring-inner { width: 40px; height: 40px; border-radius: 50%; background: white; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 11px; }
+  .deliverable-body { padding: 0 18px 16px; }
+  .deliv-toggle { display: flex; gap: 8px; margin-bottom: 10px; }
+  .deliv-toggle button { flex: 1; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: white; font-size: 11px; font-weight: 700; cursor: pointer; }
+  .deliv-toggle button.active-without { background: var(--gov-red-bg); color: var(--gov-red); border-color: var(--gov-red); }
+  .deliv-toggle button.active-with { background: var(--gov-green-bg); color: var(--gov-green); border-color: var(--gov-green); }
+  .deliv-list { max-height: 220px; overflow-y: auto; font-size: 12px; }
+  .deliv-list-item { padding: 6px 0; border-bottom: 1px solid #F0F2F6; display: flex; justify-content: space-between; }
+  .deliv-list-item:last-child { border-bottom: none; }
+  .deliv-list-item .school-block { color: var(--text-secondary); font-size: 11px; }
+  .deliv-rating-group { margin-bottom: 10px; }
+  .deliv-rating-label { font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+  .deliv-print-btn { margin-top: 10px; width: 100%; padding: 7px; border-radius: 8px; border: 1px solid var(--gov-blue); background: white; color: var(--gov-blue); font-size: 12px; font-weight: 700; cursor: pointer; }
+  .empty-deliv-list { color: var(--text-secondary); font-size: 12px; padding: 8px 0; }
+
+  .print-header { display: none; }
+
+  @media print {
+    .no-print { display: none !important; }
+    .sidebar { display: none !important; }
+    .shell { display: block !important; }
+    .main { padding: 0 !important; margin: 0 !important; width: 100% !important; }
+    .print-header { display: block !important; margin-bottom: 20px; }
+    .print-header h1 { font-size: 20px; margin: 0 0 4px; }
+    .print-header p { font-size: 12px; margin: 2px 0; color: #444; }
+    .print-header hr { margin-top: 10px; border: none; border-top: 2px solid #1E4FA3; }
+    .deliverable-grid { display: block !important; }
+    .deliverable-card { box-shadow: none !important; border: 1px solid #ccc; margin-bottom: 14px; }
+    .deliv-list { max-height: none !important; overflow: visible !important; }
+    body.print-single .deliverable-card { display: none !important; }
+    body.print-single .deliverable-card.print-target { display: block !important; }
+    .deliv-toggle, .deliv-print-btn { display: none !important; }
+    body.print-single .deliv-list.hidden-list,
+    .deliv-list.hidden-list { display: block !important; }
+  }
+</style>
+
+<script src="portal.js"></script>
+<script>
+  requireAdmin();
+  renderSidebarFooter();
+
+  let currentData = null;
+
+  function pctColor(pct) {
+    if (pct === null || pct === undefined) return '#CBD5E1';
+    if (pct >= 80) return '#1E8A4C';
+    if (pct >= 50) return '#B8860B';
+    return '#D32F2F';
+  }
+
+  async function loadBlockOptions() {
+    try {
+      const data = await apiGet('/api/reports/quick-deliverables');
+      const select = document.getElementById('blockFilter');
+      (data.blocksAvailable || []).forEach((b) => {
+        const opt = document.createElement('option');
+        opt.value = b;
+        opt.textContent = b;
+        select.appendChild(opt);
+      });
+    } catch (e) { /* ignore — filter just stays at "All" */ }
+  }
+
+  async function loadReport() {
+    const block = document.getElementById('blockFilter').value;
+    const container = document.getElementById('content');
+    container.innerHTML = '<div class="empty-state">Loading...</div>';
+    try {
+      const url = block ? `/api/reports/quick-deliverables?block=${encodeURIComponent(block)}` : '/api/reports/quick-deliverables';
+      const data = await apiGet(url);
+      currentData = data;
+      renderSummary(data);
+      renderDeliverables(data);
+      updatePrintHeader(data);
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state">Couldn't load report: ${err.message}</div>`;
+    }
+  }
+
+  function updatePrintHeader(data) {
+    document.getElementById('printScopeLine').textContent = data.block
+      ? `Scope: ${data.block}`
+      : 'Scope: Full jurisdiction';
+    document.getElementById('printDateLine').textContent = `Year: ${data.year} · Generated: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })} · Schools covered: ${data.totalSchools}`;
+  }
+
+  function renderSummary(data) {
+    document.getElementById('summaryBar').innerHTML = `
+      <div>Scope: <strong>${data.block ? escapeHtml(data.block) : 'Full jurisdiction'}</strong></div>
+      <div>Year: <strong>${data.year}</strong></div>
+      <div>Schools covered: <strong>${data.totalSchools}</strong></div>
+    `;
+  }
+
+  function ring(pct) {
+    const color = pctColor(pct);
+    const val = pct !== null ? pct + '%' : '—';
+    return `<div class="deliverable-ring" style="background:conic-gradient(${color} ${pct ?? 0}%, #EEF1F6 ${pct ?? 0}% 100%);"><div class="deliverable-ring-inner" style="color:${color};">${val}</div></div>`;
+  }
+
+  function schoolListHtml(schools, emptyText) {
+    if (!schools || schools.length === 0) return `<div class="empty-deliv-list">${emptyText}</div>`;
+    return schools.map((s) => `
+      <div class="deliv-list-item">
+        <span>${escapeHtml(s.schoolName)}</span>
+        <span class="school-block">${escapeHtml(s.block || '')}${s.percent !== undefined ? ' · ' + s.percent + '%' : ''}</span>
+      </div>`).join('');
+  }
+
+  function renderDeliverables(data) {
+    const container = document.getElementById('content');
+    const grid = document.createElement('div');
+    grid.className = 'deliverable-grid';
+
+    data.deliverables.forEach((d) => {
+      const card = document.createElement('div');
+      card.className = 'deliverable-card';
+      card.id = `deliv-${d.id}`;
+
+      let bodyHtml = '';
+      if (d.type === 'YES_NO') {
+        bodyHtml = `
+          <div class="deliv-toggle">
+            <button class="active-without" onclick="toggleDelivList('${d.id}', 'without')">Without (${d.schoolsWithout.length})</button>
+            <button onclick="toggleDelivList('${d.id}', 'with')">With (${d.schoolsWith.length})</button>
+          </div>
+          <div class="deliv-list" id="deliv-${d.id}-without">${schoolListHtml(d.schoolsWithout, 'Every school has this — nothing to flag.')}</div>
+          <div class="deliv-list hidden-list" id="deliv-${d.id}-with" style="display:none;">${schoolListHtml(d.schoolsWith, 'No school currently has this.')}</div>
+        `;
+      } else if (d.type === 'RATIO_PERCENT') {
+        bodyHtml = `
+          <div class="deliv-toggle">
+            <button class="active-without" onclick="toggleDelivList('${d.id}', 'without')">Needs Attention (${d.schoolsNeedsAttention.length})</button>
+            <button onclick="toggleDelivList('${d.id}', 'with')">Good — 80%+ (${d.schoolsGood.length})</button>
+          </div>
+          <div class="deliv-list" id="deliv-${d.id}-without">${schoolListHtml(d.schoolsNeedsAttention, 'No schools below 80% — all in good shape.')}</div>
+          <div class="deliv-list hidden-list" id="deliv-${d.id}-with" style="display:none;">${schoolListHtml(d.schoolsGood, 'No schools at 80% or above yet.')}</div>
+        `;
+      } else {
+        bodyHtml = d.order.map((rating) => {
+          const list = d.schoolsByRating[rating] || [];
+          if (list.length === 0) return '';
+          const badgeColor = rating === d.order[0] ? '#1E8A4C' : rating === d.order[1] ? '#4C77C4' : rating === d.order[2] ? '#B8860B' : '#D32F2F';
+          return `
+            <div class="deliv-rating-group">
+              <div class="deliv-rating-label" style="color:${badgeColor};">${escapeHtml(rating)} (${list.length})</div>
+              <div class="deliv-list">${schoolListHtml(list, '')}</div>
+            </div>`;
+        }).join('');
+      }
+
+      card.innerHTML = `
+        <div class="deliverable-head">
+          <span class="deliverable-icon">${d.icon}</span>
+          <span class="deliverable-title">${escapeHtml(d.label)}</span>
+          ${ring(d.goodPercent)}
+        </div>
+        <div class="deliverable-body">
+          ${bodyHtml}
+          <button class="deliv-print-btn" onclick="printSingle('${d.id}')">🖨️ Print This Deliverable</button>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+
+    container.innerHTML = '';
+    container.appendChild(grid);
+  }
+
+  function toggleDelivList(id, which) {
+    const withoutEl = document.getElementById(`deliv-${id}-without`);
+    const withEl = document.getElementById(`deliv-${id}-with`);
+    const card = document.getElementById(`deliv-${id}`);
+    const buttons = card.querySelectorAll('.deliv-toggle button');
+    if (which === 'without') {
+      withoutEl.style.display = 'block';
+      withEl.style.display = 'none';
+      buttons[0].classList.add('active-without'); buttons[1].classList.remove('active-with');
+    } else {
+      withoutEl.style.display = 'none';
+      withEl.style.display = 'block';
+      buttons[1].classList.add('active-with'); buttons[0].classList.remove('active-without');
+    }
+  }
+
+  function printSingle(id) {
+    document.body.classList.add('print-single');
+    document.getElementById(`deliv-${id}`).classList.add('print-target');
+    window.print();
+    setTimeout(() => {
+      document.body.classList.remove('print-single');
+      document.getElementById(`deliv-${id}`).classList.remove('print-target');
+    }, 500);
+  }
+
+  document.getElementById('printAllBtn').addEventListener('click', () => window.print());
+  document.getElementById('blockFilter').addEventListener('change', loadReport);
+
+  loadBlockOptions().then(loadReport);
+</script>
+</body>
+</html>

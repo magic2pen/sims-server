@@ -725,4 +725,127 @@ router.get('/school/:schoolId', requireAuth('admin'), async (req, res) => {
   }
 });
 
+// ====================================================================
+// QUICK DELIVERABLES
+// ====================================================================
+// The whole point of this report: a clean, per-facility list of which
+// schools have it and which don't — meant to be printed and handed to
+// panchayats, urban local bodies, and line departments so a specific,
+// concrete gap (e.g. "these 6 schools have no handwashing facility")
+// can go straight into their own development/financial plans.
+const QUICK_DELIVERABLES = [
+  { id: 'infra_electricity_available', label: 'Electricity Available', type: 'YES_NO', icon: '⚡' },
+  { id: 'infra_drinking_water_available', label: 'Drinking Water Available', type: 'YES_NO', icon: '💧' },
+  { id: 'infra_separate_toilets', label: 'Separate Toilets (Boys/Girls)', type: 'YES_NO', icon: '🚻' },
+  { id: 'infra_toilets_functional', label: 'Toilets Functional', type: 'YES_NO', icon: '🚽' },
+  { id: 'infra_handwashing', label: 'Handwashing Facility', type: 'YES_NO', icon: '🧼' },
+  { id: 'infra_ramp_available', label: 'Ramp Available (Accessibility)', type: 'YES_NO', icon: '♿' },
+  { id: 'infra_playground_available', label: 'Playground Available', type: 'YES_NO', icon: '🏃' },
+  { id: 'infra_library_available', label: 'Library Available', type: 'YES_NO', icon: '📚' },
+  { id: 'infra_science_lab_available', label: 'Science Laboratory Available', type: 'YES_NO', icon: '🔬' },
+  { id: 'infra_sports_equipment_available', label: 'Sports Equipment Available', type: 'YES_NO', icon: '⚽' },
+  { id: 'furniture_adequate_new', label: 'Adequate Furniture Available', type: 'YES_NO', icon: '🪑' },
+  { id: 'safety_first_aid_box', label: 'First Aid Box Available', type: 'YES_NO', icon: '🩹' },
+  { id: 'safety_fire_extinguisher', label: 'Fire Extinguisher Available', type: 'YES_NO', icon: '🧯' },
+  { id: 'infra_fans_working', label: 'Fans Working', type: 'RATIO_PERCENT', icon: '🌀' },
+  { id: 'infra_lights_working', label: 'Lights Working', type: 'RATIO_PERCENT', icon: '💡' },
+  { id: 'infra_boundary_wall', label: 'Boundary Wall Condition', type: 'CHOICE', icon: '🧱', order: ['Good', 'Average', 'Poor', 'Absent'] },
+  { id: 'infra_building_condition', label: 'Building Condition', type: 'CHOICE', icon: '🏫', order: ['Excellent', 'Good', 'Fair', 'Poor'] },
+  { id: 'infra_roof_condition', label: 'Roof Condition', type: 'CHOICE', icon: '🏠', order: ['Excellent', 'Good', 'Fair', 'Poor'] },
+  { id: 'infra_ceiling_condition', label: 'Ceiling Condition', type: 'CHOICE', icon: '⬜', order: ['Good', 'Fair', 'Poor', 'Not Applicable'] }
+];
+
+function schoolRef(r) {
+  return { schoolId: r.school_id, schoolName: r.school_name, block: r.block, district: r.district };
+}
+
+function computeDeliverable(def, currentRows) {
+  if (def.type === 'YES_NO') {
+    const schoolsWith = [];
+    const schoolsWithout = [];
+    currentRows.forEach((r) => {
+      const answers = parseAnswers(r.answers_json);
+      const val = answers[def.id] && answers[def.id].value;
+      if (val === 'Yes') schoolsWith.push(schoolRef(r));
+      else if (val === 'No') schoolsWithout.push(schoolRef(r));
+    });
+    const answered = schoolsWith.length + schoolsWithout.length;
+    return {
+      id: def.id, label: def.label, icon: def.icon, type: def.type,
+      answered, goodPercent: answered > 0 ? Math.round((schoolsWith.length / answered) * 100) : null,
+      schoolsWith, schoolsWithout
+    };
+  }
+
+  if (def.type === 'RATIO_PERCENT') {
+    let totalInstalled = 0;
+    let totalWorking = 0;
+    const schoolPercents = [];
+    currentRows.forEach((r) => {
+      const answers = parseAnswers(r.answers_json);
+      const ans = answers[def.id];
+      if (!ans) return;
+      const installed = parseInt(ans.value, 10) || 0;
+      const working = parseInt(ans.value2, 10) || 0;
+      if (installed > 0) {
+        totalInstalled += installed;
+        totalWorking += working;
+        schoolPercents.push({ ...schoolRef(r), percent: Math.round((working / installed) * 100), installed, working });
+      }
+    });
+    schoolPercents.sort((a, b) => a.percent - b.percent);
+    return {
+      id: def.id, label: def.label, icon: def.icon, type: def.type,
+      answered: schoolPercents.length,
+      goodPercent: totalInstalled > 0 ? Math.round((totalWorking / totalInstalled) * 100) : null,
+      schoolsGood: schoolPercents.filter((s) => s.percent >= 80),
+      schoolsNeedsAttention: schoolPercents.filter((s) => s.percent < 80)
+    };
+  }
+
+  // CHOICE
+  const byRating = {};
+  def.order.forEach((o) => { byRating[o] = []; });
+  let answered = 0;
+  currentRows.forEach((r) => {
+    const answers = parseAnswers(r.answers_json);
+    const val = answers[def.id] && answers[def.id].value;
+    if (val && byRating[val]) {
+      byRating[val].push(schoolRef(r));
+      answered++;
+    }
+  });
+  const goodCount = (byRating[def.order[0]] || []).length + (byRating[def.order[1]] || []).length;
+  return {
+    id: def.id, label: def.label, icon: def.icon, type: def.type,
+    answered, goodPercent: answered > 0 ? Math.round((goodCount / answered) * 100) : null,
+    order: def.order, schoolsByRating: byRating
+  };
+}
+
+// GET /api/reports/quick-deliverables?block=X (optional — for a single
+// Block/Nagar Panchayat/Municipality's printable report)
+router.get('/quick-deliverables', requireAuth('admin'), async (req, res) => {
+  try {
+    const allRows = await getScopedInspections(req);
+    const allCurrentRows = currentYearLatestPerSchool(allRows);
+    const { block } = req.query;
+    const currentRows = block ? allCurrentRows.filter((r) => r.block === block) : allCurrentRows;
+
+    const deliverables = QUICK_DELIVERABLES.map((def) => computeDeliverable(def, currentRows));
+    const blocksAvailable = [...new Set(allCurrentRows.map((r) => r.block).filter(Boolean))].sort();
+
+    res.json({
+      year: new Date().getFullYear(),
+      block: block || null,
+      totalSchools: currentRows.length,
+      blocksAvailable,
+      deliverables
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error generating quick deliverables report', detail: err.message });
+  }
+});
+
 module.exports = router;
