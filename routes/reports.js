@@ -32,21 +32,25 @@ const KEY_INDICATORS = [
 router.get('/summary', requireAuth('admin'), async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT i.id, i.district, i.block, i.overall_grade, i.grade_score, i.answers_json, i.uploaded_at,
+      SELECT i.id, i.school_id, i.school_name, i.district, i.block, i.overall_grade, i.grade_score, i.answers_json, i.uploaded_at,
              o.district AS officer_district, o.subdivision AS officer_subdivision, o.block AS officer_block
       FROM inspections i
       LEFT JOIN officers o ON i.officer_id = o.id
     `);
 
     const adminCtx = { admin_level: req.user.adminLevel, district: req.user.district, subdivision: req.user.subdivision, block: req.user.block };
-    let rows = result.rows.filter((r) =>
+    let allRows = result.rows.filter((r) =>
       isWithinJurisdiction(adminCtx, { district: r.officer_district, subdivision: r.officer_subdivision, block: r.officer_block })
     );
 
     const { district, block } = req.query;
-    if (district) rows = rows.filter((r) => r.district === district);
-    if (block) rows = rows.filter((r) => r.block === block);
+    if (district) allRows = allRows.filter((r) => r.district === district);
+    if (block) allRows = allRows.filter((r) => r.block === block);
 
+    // Current-state snapshot (this calendar year, latest inspection per
+    // school) — what grade distribution and facility indicators are based
+    // on, so a school inspected 3 times doesn't get counted 3 times.
+    const rows = currentYearLatestPerSchool(allRows);
     const totalInspections = rows.length;
 
     // Grade distribution
@@ -81,9 +85,11 @@ router.get('/summary', requireAuth('admin'), async (req, res) => {
       };
     });
 
-    // Monthly trend, by upload date
+    // Monthly trend — deliberately uses the FULL inspection history (every
+    // visit, not deduplicated), since a trend line's purpose is to show
+    // actual activity over time, unlike the snapshot figures above.
     const monthlyMap = {};
-    rows.forEach((r) => {
+    allRows.forEach((r) => {
       const d = new Date(r.uploaded_at);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       if (!monthlyMap[key]) monthlyMap[key] = { count: 0, gradeSum: 0, gradeCount: 0 };
@@ -99,7 +105,7 @@ router.get('/summary', requireAuth('admin'), async (req, res) => {
       avgGradeScore: monthlyMap[key].gradeCount > 0 ? Math.round(monthlyMap[key].gradeSum / monthlyMap[key].gradeCount) : null
     }));
 
-    res.json({ totalInspections, gradeDistribution, indicators, monthlyTrend });
+    res.json({ year: new Date().getFullYear(), totalInspections, gradeDistribution, indicators, monthlyTrend });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error generating report', detail: err.message });
@@ -133,6 +139,31 @@ function monthKey(dateStr) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// Restricts a set of scoped inspections to a single "current state"
+// snapshot: only the current calendar year, and — if a school was
+// inspected more than once within that year — only its MOST RECENT
+// visit. This is what every average, ranking, distribution, and
+// facility-percentage figure is based on, so a school inspected 3
+// times in 10 days doesn't skew the numbers 3x. Resets automatically
+// on 1 January every year — no manual reset needed.
+//
+// Deliberately NOT used for month-by-month trend charts, which stay
+// based on the full inspection history — a trend line's whole purpose
+// is to show real activity over time, so collapsing it to one point
+// per school would defeat it.
+function currentYearLatestPerSchool(rows, year) {
+  const targetYear = year || new Date().getFullYear();
+  const yearRows = rows.filter((r) => new Date(r.uploaded_at).getFullYear() === targetYear);
+  const bySchool = {};
+  yearRows.forEach((r) => {
+    const key = r.school_id != null ? `id:${r.school_id}` : `name:${r.school_name}|${r.district}|${r.block}`;
+    if (!bySchool[key] || new Date(r.uploaded_at) > new Date(bySchool[key].uploaded_at)) {
+      bySchool[key] = r;
+    }
+  });
+  return Object.values(bySchool);
+}
+
 // ====================================================================
 // TEACHER ATTENDANCE
 // ====================================================================
@@ -156,8 +187,13 @@ function extractTeacherAttendance(answers) {
 // With block -> full drill-down for that one block.
 router.get('/teacher-attendance', requireAuth('admin'), async (req, res) => {
   try {
-    const rows = await getScopedInspections(req);
-    const enriched = rows
+    const allRows = await getScopedInspections(req);
+    const currentRows = currentYearLatestPerSchool(allRows);
+    const enriched = currentRows
+      .map((r) => ({ ...r, ta: extractTeacherAttendance(parseAnswers(r.answers_json)) }))
+      .filter((r) => r.ta.posted > 0);
+    // Full history (not deduplicated) — used only for the trend chart.
+    const allEnriched = allRows
       .map((r) => ({ ...r, ta: extractTeacherAttendance(parseAnswers(r.answers_json)) }))
       .filter((r) => r.ta.posted > 0);
 
@@ -179,7 +215,7 @@ router.get('/teacher-attendance', requireAuth('admin'), async (req, res) => {
         avgAttendancePercent: b.percentCount > 0 ? Math.round(b.percentSum / b.percentCount) : null,
         unauthorizedLeaveTotal: b.unauthorizedLeaveTotal
       })).sort((a, b) => (a.avgAttendancePercent ?? 999) - (b.avgAttendancePercent ?? 999));
-      return res.json({ mode: 'overview', blocks });
+      return res.json({ mode: 'overview', year: new Date().getFullYear(), blocks });
     }
 
     const blockRows = enriched.filter((r) => r.block === block);
@@ -191,15 +227,16 @@ router.get('/teacher-attendance', requireAuth('admin'), async (req, res) => {
     const validPercents = blockRows.map((r) => r.ta.percent).filter((p) => p !== null);
     const avgAttendancePercent = validPercents.length > 0 ? Math.round(validPercents.reduce((a, b) => a + b, 0) / validPercents.length) : null;
 
+    const allBlockRows = allEnriched.filter((r) => r.block === block);
     const monthlyMap = {};
-    blockRows.forEach((r) => {
+    allBlockRows.forEach((r) => {
       const key = monthKey(r.uploaded_at);
       if (!monthlyMap[key]) monthlyMap[key] = { sum: 0, count: 0 };
       if (r.ta.percent !== null) { monthlyMap[key].sum += r.ta.percent; monthlyMap[key].count++; }
     });
     const trend = Object.keys(monthlyMap).sort().map((k) => ({ month: k, avgAttendancePercent: monthlyMap[k].count > 0 ? Math.round(monthlyMap[k].sum / monthlyMap[k].count) : null }));
 
-    res.json({ mode: 'detail', block, totalInspections: blockRows.length, avgAttendancePercent, totalUnauthorizedLeave, schools, trend });
+    res.json({ mode: 'detail', block, year: new Date().getFullYear(), totalInspections: blockRows.length, avgAttendancePercent, totalUnauthorizedLeave, schools, trend });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error generating teacher attendance report', detail: err.message });
@@ -304,8 +341,12 @@ function aggregateStudentDetail(blockRows) {
 // GET /api/reports/student-attendance?block=X
 router.get('/student-attendance', requireAuth('admin'), async (req, res) => {
   try {
-    const rows = await getScopedInspections(req);
-    const enriched = rows
+    const allRows = await getScopedInspections(req);
+    const currentRows = currentYearLatestPerSchool(allRows);
+    const enriched = currentRows
+      .map((r) => ({ ...r, sa: extractStudentAttendance(parseAnswers(r.answers_json)) }))
+      .filter((r) => r.sa.totalEnr > 0);
+    const allEnriched = allRows
       .map((r) => ({ ...r, sa: extractStudentAttendance(parseAnswers(r.answers_json)) }))
       .filter((r) => r.sa.totalEnr > 0);
 
@@ -325,7 +366,7 @@ router.get('/student-attendance', requireAuth('admin'), async (req, res) => {
         inspectionCount: b.inspectionCount,
         avgAttendancePercent: b.percentCount > 0 ? Math.round(b.percentSum / b.percentCount) : null
       })).sort((a, b) => (a.avgAttendancePercent ?? 999) - (b.avgAttendancePercent ?? 999));
-      return res.json({ mode: 'overview', blocks });
+      return res.json({ mode: 'overview', year: new Date().getFullYear(), blocks });
     }
 
     const blockRows = enriched.filter((r) => r.block === block);
@@ -341,15 +382,16 @@ router.get('/student-attendance', requireAuth('admin'), async (req, res) => {
       }))
       .sort((a, b) => (b.attendancePercent ?? -1) - (a.attendancePercent ?? -1));
 
+    const allBlockRows = allEnriched.filter((r) => r.block === block);
     const monthlyMap = {};
-    blockRows.forEach((r) => {
+    allBlockRows.forEach((r) => {
       const key = monthKey(r.uploaded_at);
       if (!monthlyMap[key]) monthlyMap[key] = { sum: 0, count: 0 };
       if (r.sa.percent !== null) { monthlyMap[key].sum += r.sa.percent; monthlyMap[key].count++; }
     });
     const trend = Object.keys(monthlyMap).sort().map((k) => ({ month: k, avgAttendancePercent: monthlyMap[k].count > 0 ? Math.round(monthlyMap[k].sum / monthlyMap[k].count) : null }));
 
-    res.json({ mode: 'detail', block, totalInspections: blockRows.length, ...detail, schools, trend });
+    res.json({ mode: 'detail', block, year: new Date().getFullYear(), totalInspections: blockRows.length, ...detail, schools, trend });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error generating student attendance report', detail: err.message });
@@ -389,8 +431,12 @@ function scoreToLabel(score) {
 // GET /api/reports/academic-performance?block=X — same overview/detail pattern.
 router.get('/academic-performance', requireAuth('admin'), async (req, res) => {
   try {
-    const rows = await getScopedInspections(req);
-    const enriched = rows
+    const allRows = await getScopedInspections(req);
+    const currentRows = currentYearLatestPerSchool(allRows);
+    const enriched = currentRows
+      .map((r) => ({ ...r, ap: extractAcademicPerformance(parseAnswers(r.answers_json)) }))
+      .filter((r) => r.ap !== null);
+    const allEnriched = allRows
       .map((r) => ({ ...r, ap: extractAcademicPerformance(parseAnswers(r.answers_json)) }))
       .filter((r) => r.ap !== null);
 
@@ -411,7 +457,7 @@ router.get('/academic-performance', requireAuth('admin'), async (req, res) => {
         avgScore: Math.round((b.scoreSum / b.inspectionCount) * 100) / 100,
         avgLabel: scoreToLabel(b.scoreSum / b.inspectionCount)
       })).sort((a, b) => a.avgScore - b.avgScore);
-      return res.json({ mode: 'overview', blocks });
+      return res.json({ mode: 'overview', year: new Date().getFullYear(), blocks });
     }
 
     const blockRows = enriched.filter((r) => r.block === block);
@@ -425,8 +471,9 @@ router.get('/academic-performance', requireAuth('admin'), async (req, res) => {
       return vals.length > 0 ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100 : null;
     };
 
+    const allBlockRows = allEnriched.filter((r) => r.block === block);
     const monthlyMap = {};
-    blockRows.forEach((r) => {
+    allBlockRows.forEach((r) => {
       const key = monthKey(r.uploaded_at);
       if (!monthlyMap[key]) monthlyMap[key] = { sum: 0, count: 0 };
       monthlyMap[key].sum += r.ap.score;
@@ -435,7 +482,7 @@ router.get('/academic-performance', requireAuth('admin'), async (req, res) => {
     const trend = Object.keys(monthlyMap).sort().map((k) => ({ month: k, avgScore: Math.round((monthlyMap[k].sum / monthlyMap[k].count) * 100) / 100 }));
 
     res.json({
-      mode: 'detail', block, totalInspections: blockRows.length, avgScore, avgLabel: scoreToLabel(avgScore),
+      mode: 'detail', block, year: new Date().getFullYear(), totalInspections: blockRows.length, avgScore, avgLabel: scoreToLabel(avgScore),
       skillBreakdown: { reading: avgBySkill('reading'), writing: avgBySkill('writing'), math: avgBySkill('math') },
       schools, trend
     });
@@ -561,8 +608,9 @@ function aggregateInfrastructure(infraRows) {
 // GET /api/reports/infrastructure?block=X
 router.get('/infrastructure', requireAuth('admin'), async (req, res) => {
   try {
-    const rows = await getScopedInspections(req);
-    const infraRows = rows
+    const allRows = await getScopedInspections(req);
+    const currentRows = currentYearLatestPerSchool(allRows);
+    const infraRows = currentRows
       .map((r) => ({ ...r, infra: extractInfrastructure(parseAnswers(r.answers_json)) }))
       .filter((r) => r.infra.healthScore !== null);
 
@@ -581,7 +629,7 @@ router.get('/infrastructure', requireAuth('admin'), async (req, res) => {
       }).sort((a, b) => (a.healthScore ?? 999) - (b.healthScore ?? 999));
 
       const overall = aggregateInfrastructure(infraRows);
-      return res.json({ mode: 'overview', ...overall, blocks });
+      return res.json({ mode: 'overview', year: new Date().getFullYear(), ...overall, blocks });
     }
 
     const blockRows = infraRows.filter((r) => r.block === block);
@@ -589,7 +637,7 @@ router.get('/infrastructure', requireAuth('admin'), async (req, res) => {
     const schools = blockRows.map((r) => ({ schoolId: r.school_id, schoolName: r.school_name, healthScore: r.infra.healthScore, uploadedAt: r.uploaded_at }))
       .sort((a, b) => (b.healthScore ?? -1) - (a.healthScore ?? -1));
 
-    res.json({ mode: 'detail', block, ...agg, schools });
+    res.json({ mode: 'detail', block, year: new Date().getFullYear(), ...agg, schools });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error generating infrastructure report', detail: err.message });
@@ -603,6 +651,13 @@ router.get('/infrastructure', requireAuth('admin'), async (req, res) => {
 // This is what a school name links to from the "Best to Worst" lists —
 // no more digging through Inspections and downloading a PDF just to
 // see one school's numbers.
+//
+// Scoped to the current calendar year, matching every other report. If
+// the school was inspected more than once this year, a combined total
+// would be misleading (e.g. "attendance" across 3 visits in 10 days
+// means nothing useful) — so instead of aggregating, this returns each
+// inspection's raw answers separately, and the Portal renders them as
+// a side-by-side table: one column per date, latest on the left.
 router.get('/school/:schoolId', requireAuth('admin'), async (req, res) => {
   try {
     const schoolResult = await pool.query('SELECT id, name, district, subdivision, block FROM schools WHERE id = $1', [req.params.schoolId]);
@@ -614,40 +669,56 @@ router.get('/school/:schoolId', requireAuth('admin'), async (req, res) => {
       return res.status(403).json({ error: 'This school is outside your jurisdiction.' });
     }
 
+    const currentYear = new Date().getFullYear();
     const result = await pool.query(
-      'SELECT id, answers_json, uploaded_at, overall_grade FROM inspections WHERE school_id = $1 ORDER BY uploaded_at ASC',
-      [req.params.schoolId]
+      `SELECT id, answers_json, uploaded_at, overall_grade, grade_score, photos_json, signature_base64
+       FROM inspections
+       WHERE school_id = $1 AND EXTRACT(YEAR FROM uploaded_at) = $2
+       ORDER BY uploaded_at DESC`,
+      [req.params.schoolId, currentYear]
     );
-    const rows = result.rows.map((r) => ({
-      ...r,
-      ta: extractTeacherAttendance(parseAnswers(r.answers_json)),
-      sa: extractStudentAttendance(parseAnswers(r.answers_json))
-    }));
 
-    const teacherRows = rows.filter((r) => r.ta.posted > 0);
-    const teacherPostedTotal = teacherRows.reduce((sum, r) => sum + r.ta.posted, 0);
-    const teacherPresentTotal = teacherRows.reduce((sum, r) => sum + r.ta.present, 0);
-    const teacherUnauthorizedTotal = teacherRows.reduce((sum, r) => sum + r.ta.unauthorizedLeave, 0);
-    const teacher = {
-      totalInspections: teacherRows.length,
-      attendancePercent: teacherPostedTotal > 0 ? Math.round((teacherPresentTotal / teacherPostedTotal) * 100) : null,
-      teachersPosted: teacherPostedTotal,
-      teachersPresent: teacherPresentTotal,
-      unauthorizedLeaveTotal: teacherUnauthorizedTotal,
-      trend: teacherRows.map((r) => ({ date: r.uploaded_at, percent: r.ta.percent, unauthorizedLeave: r.ta.unauthorizedLeave }))
-    };
+    const baseInfo = { schoolName: school.name, district: school.district, block: school.block, year: currentYear };
 
-    const studentRows = rows.filter((r) => r.sa.totalEnr > 0);
-    let student = null;
-    if (studentRows.length > 0) {
-      const agg = aggregateStudentDetail(studentRows);
-      student = { totalInspections: studentRows.length, ...agg, trend: studentRows.map((r) => ({ date: r.uploaded_at, percent: r.sa.percent })) };
+    if (result.rows.length === 0) {
+      return res.json({ ...baseInfo, totalInspections: 0, multipleInspections: false, teacher: null, student: null });
     }
 
-    res.json({
-      schoolName: school.name, district: school.district, block: school.block,
-      totalInspections: rows.length, teacher, student
-    });
+    if (result.rows.length === 1) {
+      const r = result.rows[0];
+      const answers = parseAnswers(r.answers_json);
+      const ta = extractTeacherAttendance(answers);
+      const sa = extractStudentAttendance(answers);
+
+      const teacher = ta.posted > 0
+        ? { totalInspections: 1, attendancePercent: ta.percent, teachersPosted: ta.posted, teachersPresent: ta.present, unauthorizedLeaveTotal: ta.unauthorizedLeave, trend: [{ date: r.uploaded_at, percent: ta.percent, unauthorizedLeave: ta.unauthorizedLeave }] }
+        : { totalInspections: 0, attendancePercent: null, teachersPosted: 0, teachersPresent: 0, unauthorizedLeaveTotal: 0, trend: [] };
+
+      let student = null;
+      if (sa.totalEnr > 0) {
+        const agg = aggregateStudentDetail([{ sa }]);
+        student = { totalInspections: 1, ...agg, trend: [{ date: r.uploaded_at, percent: sa.percent }] };
+      }
+
+      return res.json({
+        ...baseInfo, totalInspections: 1, multipleInspections: false,
+        overallGrade: r.overall_grade, uploadedAt: r.uploaded_at,
+        teacher, student
+      });
+    }
+
+    // Multiple inspections this year — hand the Portal each date's raw
+    // answers so it can render the side-by-side comparison table using
+    // the same question schema the full inspection report already uses.
+    const inspections = result.rows.map((r) => ({
+      inspectionId: r.id,
+      date: r.uploaded_at,
+      overallGrade: r.overall_grade,
+      gradeScore: r.grade_score,
+      answersJson: r.answers_json
+    }));
+
+    res.json({ ...baseInfo, totalInspections: result.rows.length, multipleInspections: true, inspections });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error generating school report', detail: err.message });

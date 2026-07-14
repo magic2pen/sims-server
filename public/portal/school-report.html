@@ -74,9 +74,20 @@
   .pct-good { background: var(--gov-green-bg); color: var(--gov-green); }
   .pct-mid { background: var(--gov-amber-bg); color: var(--gov-amber); }
   .pct-bad { background: var(--gov-red-bg); color: var(--gov-red); }
+  .compare-table-wrap { overflow-x: auto; background: var(--card); border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .compare-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  .compare-table th, .compare-table td { padding: 10px 16px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+  .compare-table thead th { background: #FAFBFF; font-weight: 700; position: sticky; top: 0; }
+  .compare-table thead th a { color: var(--gov-blue); font-weight: 700; text-decoration: none; }
+  .compare-table thead th a:hover { text-decoration: underline; }
+  .compare-table .grade-sub { font-weight: 400; font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+  .compare-table .sticky-col { position: sticky; left: 0; background: var(--card); z-index: 1; font-weight: 500; white-space: normal; min-width: 220px; }
+  .compare-table thead .sticky-col { background: #FAFBFF; z-index: 2; }
+  .compare-table .section-row td { background: #EEF1F6; font-weight: 700; font-size: 12px; color: var(--gov-blue); position: static; }
 </style>
 
 <script src="portal.js"></script>
+<script src="questionnaireSchema.js"></script>
 <script>
   requireAdmin();
   renderSidebarFooter();
@@ -119,7 +130,11 @@
     }
     try {
       const data = await apiGet(`/api/reports/school/${id}`);
-      render(data);
+      if (data.multipleInspections) {
+        renderMultipleInspections(data);
+      } else {
+        render(data);
+      }
     } catch (err) {
       container.innerHTML = `<div class="empty-state">Couldn't load this school's report: ${err.message}</div>`;
     }
@@ -227,6 +242,98 @@
         });
       }
     }
+  }
+
+  // ================================================================
+  // Multiple inspections this calendar year — tabular comparison
+  // instead of a combined/averaged total, since a total across visits
+  // just days or weeks apart wouldn't mean anything useful.
+  // ================================================================
+
+  function computeStudentSummary(answers) {
+    let totalEnr = 0, totalPres = 0, boysEnr = 0, boysPres = 0, girlsEnr = 0, girlsPres = 0;
+    Object.keys(answers).forEach((key) => {
+      const m = key.match(/^cls(.+)_enrB$/);
+      if (!m) return;
+      const label = m[1];
+      const v = (id) => parseInt((answers[id] && answers[id].value) || '0', 10) || 0;
+      const enrB = v(`cls${label}_enrB`), enrG = v(`cls${label}_enrG`), presB = v(`cls${label}_presB`), presG = v(`cls${label}_presG`);
+      totalEnr += enrB + enrG; totalPres += presB + presG;
+      boysEnr += enrB; boysPres += presB; girlsEnr += enrG; girlsPres += presG;
+    });
+    return {
+      overallPct: totalEnr > 0 ? Math.round((totalPres / totalEnr) * 100) : null,
+      boysPct: boysEnr > 0 ? Math.round((boysPres / boysEnr) * 100) : null,
+      girlsPct: girlsEnr > 0 ? Math.round((girlsPres / girlsEnr) * 100) : null
+    };
+  }
+
+  function computeTeacherSummary(answers) {
+    const v = (id) => parseInt((answers[id] && answers[id].value) || '0', 10) || 0;
+    const posted = v('staff_teach_male') + v('staff_teach_female');
+    const present = v('staff_teach_present_male') + v('staff_teach_present_female');
+    const leaveAns = answers['unauthorized_leave'];
+    const leave = leaveAns && leaveAns.value === 'Yes' ? `${v('unauthorized_leave_count')} leave(s)` : (leaveAns ? 'None' : '—');
+    return { pct: posted > 0 ? Math.round((present / posted) * 100) : null, leave };
+  }
+
+  function compareRow(label, values, numCols) {
+    return `<tr><td class="sticky-col">${escapeHtml(label)}</td>${values.map((v) => `<td>${escapeHtml(String(v))}</td>`).join('')}</tr>`;
+  }
+
+  function sectionDivider(title, icon, numCols) {
+    return `<tr class="section-row"><td colspan="${numCols + 1}">${icon} ${escapeHtml(title)}</td></tr>`;
+  }
+
+  function renderMultipleInspections(data) {
+    const container = document.getElementById('content');
+    const numCols = data.inspections.length;
+    const dates = data.inspections.map((i) => new Date(i.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }));
+    const answersList = data.inspections.map((i) => { try { return JSON.parse(i.answersJson || '{}'); } catch (e) { return {}; } });
+
+    let html = `
+      <h1 class="page-title">${escapeHtml(data.schoolName)}</h1>
+      <p class="page-subtitle">${escapeHtml(data.block || '')}, ${escapeHtml(data.district || '')} — ${data.totalInspections} inspections in ${data.year}</p>
+      <div class="card" style="background:var(--gov-amber-bg); border-left:4px solid var(--gov-amber);">
+        <p style="font-size:13px;color:#8a6511;margin:0;">
+          <strong>This school was inspected ${data.totalInspections} times in ${data.year}.</strong>
+          A combined total across visits just days or weeks apart wouldn't be meaningful, so here's every
+          visit side by side instead — latest on the left. Click any date to open that visit's full report.
+        </p>
+      </div>
+      <div class="compare-table-wrap"><table class="compare-table"><thead><tr><th class="sticky-col">Question</th>`;
+
+    data.inspections.forEach((insp, i) => {
+      html += `<th><a href="inspection.html?id=${insp.inspectionId}">${dates[i]}</a><div class="grade-sub">${escapeHtml(insp.overallGrade || '—')}</div></th>`;
+    });
+    html += `</tr></thead><tbody>`;
+
+    const studentMetrics = answersList.map(computeStudentSummary);
+    html += sectionDivider('Student Attendance', '🧑‍🎓', numCols);
+    html += compareRow('Overall Attendance %', studentMetrics.map((m) => m.overallPct !== null ? m.overallPct + '%' : '—'));
+    html += compareRow('Boys %', studentMetrics.map((m) => m.boysPct !== null ? m.boysPct + '%' : '—'));
+    html += compareRow('Girls %', studentMetrics.map((m) => m.girlsPct !== null ? m.girlsPct + '%' : '—'));
+
+    const teacherMetrics = answersList.map(computeTeacherSummary);
+    html += sectionDivider('Teacher & Staff Attendance', '👨‍🏫', numCols);
+    html += compareRow('Teacher Attendance %', teacherMetrics.map((m) => m.pct !== null ? m.pct + '%' : '—'));
+    html += compareRow('Unauthorized Leave', teacherMetrics.map((m) => m.leave));
+
+    QUESTIONNAIRE_SECTIONS.forEach((section) => {
+      if (['STUDENT_ATTENDANCE', 'STAFF_ATTENDANCE', 'PHOTOS', 'SIGNATURE'].includes(section.special)) return;
+      html += sectionDivider(section.title, section.icon, numCols);
+      section.questions.forEach((q) => {
+        html += compareRow(q.label, answersList.map((a) => {
+          const ans = a[q.id];
+          if (!ans || ans.value === undefined || ans.value === '') return '—';
+          if (q.type === 'RATIO_PAIR') return `${ans.value2 || 0} of ${ans.value || 0} working`;
+          return ans.value + (ans.otherText ? `: ${ans.otherText}` : '');
+        }));
+      });
+    });
+
+    html += `</tbody></table></div>`;
+    container.innerHTML = html;
   }
 
   load();

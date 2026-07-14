@@ -36,7 +36,7 @@
   <main class="main">
     <a href="reports.html" class="back-link-btn">&larr; Back to Reports</a>
     <h1 class="page-title">👨‍🏫 Teacher Attendance</h1>
-    <p class="page-subtitle">Teacher sincerity, by Block — with unauthorized leave tracked throughout.</p>
+    <p class="page-subtitle">Teacher sincerity, by Block — with unauthorized leave tracked throughout. <span id="yearLabel" style="font-weight:600;"></span></p>
     <div id="content"><div class="empty-state">Loading...</div></div>
   </main>
 </div>
@@ -93,6 +93,7 @@
     container.innerHTML = '<div class="empty-state">Loading...</div>';
     try {
       const data = await apiGet(ENDPOINT);
+      if (data.year) document.getElementById('yearLabel').textContent = `(${data.year})`;
       if (data.blocks.length === 0) {
         container.innerHTML = '<div class="empty-state">No inspections with teacher attendance data yet.</div>';
         return;
