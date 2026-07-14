@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIMS Portal — Attendance &amp; Academics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="tripura_emblem.png" alt="" onerror="this.style.display='none'">
+      <div>
+        <div class="name">SIMS Portal</div>
+        <div class="sub">West Tripura</div>
+      </div>
+    </div>
+    <nav>
+      <a href="dashboard.html">Inspections</a>
+      <a href="reports.html" class="admin-only-nav" style="display:none;">Reports</a>
+      <a href="attendance-reports.html" class="admin-only-nav active" style="display:none;">Attendance &amp; Academics</a>
+      <a href="assignments.html" class="admin-only-nav" style="display:none;">Assignments</a>
+      <a href="admins.html" class="admin-only-nav" style="display:none;">Admins</a>
+      <a href="officers.html" class="admin-only-nav" style="display:none;">Officers</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="officer-name" id="sidebarOfficerName">—</div>
+      <div class="officer-role" id="sidebarOfficerRole">—</div>
+      <button id="sidebarLogoutBtn">Sign Out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <h1 class="page-title">Attendance &amp; Academic Performance</h1>
+    <p class="page-subtitle">The three core indicators — teacher sincerity, student presence, and learning ability — broken down by Block, for real development planning.</p>
+
+    <div class="role-toggle" style="max-width:520px; margin-bottom:20px;">
+      <button type="button" class="tab-btn active" data-tab="teacher" onclick="switchTab('teacher')">Teacher Attendance</button>
+      <button type="button" class="tab-btn" data-tab="student" onclick="switchTab('student')">Student Attendance</button>
+      <button type="button" class="tab-btn" data-tab="academic" onclick="switchTab('academic')">Academic Performance</button>
+    </div>
+
+    <div id="tabContent">
+      <div class="empty-state">Loading...</div>
+    </div>
+  </main>
+</div>
+
+<style>
+  .role-toggle { display: flex; background: #F0F4FC; border-radius: 10px; padding: 4px; }
+  .tab-btn {
+    flex: 1; border: none; background: transparent; padding: 10px; border-radius: 8px;
+    font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-family: inherit;
+  }
+  .tab-btn.active { background: white; color: var(--gov-blue); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+  .overview-row {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr 1fr 1fr;
+    gap: 10px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    align-items: center;
+    cursor: pointer;
+  }
+  .overview-row:hover { background: #FAFBFF; }
+  .overview-row.header { font-weight: 700; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; background: #FAFBFF; cursor: default; }
+  .overview-row.header:hover { background: #FAFBFF; }
+
+  .pct-badge { font-family: 'IBM Plex Mono', monospace; font-weight: 700; padding: 3px 10px; border-radius: 20px; display:inline-block; }
+  .pct-good { background: var(--gov-green-bg); color: var(--gov-green); }
+  .pct-mid { background: var(--gov-amber-bg); color: var(--gov-amber); }
+  .pct-bad { background: var(--gov-red-bg); color: var(--gov-red); }
+
+  .school-row {
+    display: grid;
+    grid-template-columns: 0.4fr 1.4fr 1fr 1fr;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    align-items: center;
+  }
+  .school-row.header { font-weight: 700; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; background: #FAFBFF; }
+  .rank-badge {
+    width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; background: #F0F0F0; color: var(--text-secondary);
+  }
+  .rank-badge.top { background: var(--gov-green-bg); color: var(--gov-green); }
+  .rank-badge.bottom { background: var(--gov-red-bg); color: var(--gov-red); }
+
+  .detail-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 14px; margin-bottom: 20px; }
+  .back-link-btn { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; margin-bottom:16px; cursor:pointer; color: var(--gov-blue); background:none; border:none; font-family: inherit; padding:0; }
+</style>
+
+<script src="portal.js"></script>
+<script>
+  requireAdmin();
+  renderSidebarFooter();
+
+  if (typeof Chart === 'undefined') {
+    document.getElementById('tabContent').innerHTML = '<div class="empty-state">The charting library did not load. Refresh the page.</div>';
+    throw new Error('Chart.js failed to load');
+  }
+
+  const REPORT_CONFIG = {
+    teacher: {
+      endpoint: '/api/reports/teacher-attendance',
+      title: 'Teacher Attendance',
+      pctLabel: 'Avg Attendance',
+      hasUnauthorizedLeave: true,
+      schoolPctField: 'attendancePercent',
+      schoolExtra: (s) => `${s.unauthorizedLeave > 0 ? `<span style="color:var(--gov-red);">${s.unauthorizedLeave} unauthorized leave(s)</span>` : '—'}`,
+      trendField: 'avgAttendancePercent',
+      trendLabel: 'Avg Attendance %'
+    },
+    student: {
+      endpoint: '/api/reports/student-attendance',
+      title: 'Student Attendance',
+      pctLabel: 'Avg Attendance',
+      hasUnauthorizedLeave: false,
+      schoolPctField: 'attendancePercent',
+      schoolExtra: (s) => `${s.totalPresent}/${s.totalEnrolled} present`,
+      trendField: 'avgAttendancePercent',
+      trendLabel: 'Avg Attendance %'
+    },
+    academic: {
+      endpoint: '/api/reports/academic-performance',
+      title: 'Academic Performance',
+      pctLabel: 'Avg Rating',
+      hasUnauthorizedLeave: false,
+      schoolPctField: null,
+      schoolExtra: (s) => `R: ${s.reading ?? '—'} · W: ${s.writing ?? '—'} · M: ${s.math ?? '—'} (out of 4)`,
+      trendField: 'avgScore',
+      trendLabel: 'Avg Score (out of 4)'
+    }
+  };
+
+  let activeTab = 'teacher';
+  let activeBlock = {};
+  let chartInstances = {};
+
+  function switchTab(tab) {
+    activeTab = tab;
+    document.querySelectorAll('.tab-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
+    render();
+  }
+
+  function pctClass(pct) {
+    if (pct === null || pct === undefined) return 'pct-mid';
+    if (pct >= 80) return 'pct-good';
+    if (pct >= 50) return 'pct-mid';
+    return 'pct-bad';
+  }
+
+  async function render() {
+    const block = activeBlock[activeTab];
+    if (block) {
+      await renderDetail(activeTab, block);
+    } else {
+      await renderOverview(activeTab);
+    }
+  }
+
+  async function renderOverview(tab) {
+    const config = REPORT_CONFIG[tab];
+    const container = document.getElementById('tabContent');
+    container.innerHTML = '<div class="empty-state">Loading...</div>';
+    try {
+      const data = await apiGet(config.endpoint);
+      if (data.blocks.length === 0) {
+        container.innerHTML = '<div class="empty-state">No inspections with this data yet.</div>';
+        return;
+      }
+
+      const header = tab === 'academic'
+        ? `<div class="overview-row header"><div>Block</div><div>Inspections</div><div>Avg Rating</div><div></div></div>`
+        : `<div class="overview-row header"><div>Block</div><div>Inspections</div><div>${config.pctLabel}</div><div>${config.hasUnauthorizedLeave ? 'Unauthorized Leaves' : ''}</div></div>`;
+
+      const rows = data.blocks.map((b) => {
+        const pctDisplay = tab === 'academic'
+          ? `<span class="pct-badge ${pctClass((b.avgScore / 4) * 100)}">${b.avgLabel} (${b.avgScore})</span>`
+          : `<span class="pct-badge ${pctClass(b.avgAttendancePercent)}">${b.avgAttendancePercent !== null ? b.avgAttendancePercent + '%' : '—'}</span>`;
+        const extra = config.hasUnauthorizedLeave
+          ? (b.unauthorizedLeaveTotal > 0 ? `<span style="color:var(--gov-red);font-weight:600;">${b.unauthorizedLeaveTotal}</span>` : '0')
+          : '';
+        return `
+          <div class="overview-row" onclick="openBlock('${tab}', '${b.block.replace(/'/g, "\\'")}')">
+            <div><strong>${escapeHtml(b.block)}</strong><div style="font-size:11px;color:var(--text-secondary);">${escapeHtml(b.district || '')}</div></div>
+            <div>${b.inspectionCount}</div>
+            <div>${pctDisplay}</div>
+            <div>${extra}</div>
+          </div>`;
+      }).join('');
+
+      container.innerHTML = `
+        <div class="card" style="margin-bottom:20px;">
+          <canvas id="overviewChart" style="max-height:280px;"></canvas>
+        </div>
+        <div class="card" style="padding:0; overflow:hidden;">${header}${rows}</div>
+      `;
+
+      const chartId = 'overviewChart';
+      if (chartInstances[chartId]) chartInstances[chartId].destroy();
+      const values = tab === 'academic'
+        ? data.blocks.map((b) => b.avgScore)
+        : data.blocks.map((b) => b.avgAttendancePercent);
+      const colors = tab === 'academic'
+        ? data.blocks.map((b) => pctClass((b.avgScore / 4) * 100) === 'pct-good' ? '#1E8A4C' : pctClass((b.avgScore / 4) * 100) === 'pct-mid' ? '#B8860B' : '#D32F2F')
+        : data.blocks.map((b) => pctClass(b.avgAttendancePercent) === 'pct-good' ? '#1E8A4C' : pctClass(b.avgAttendancePercent) === 'pct-mid' ? '#B8860B' : '#D32F2F');
+
+      chartInstances[chartId] = new Chart(document.getElementById(chartId), {
+        type: 'bar',
+        data: {
+          labels: data.blocks.map((b) => b.block),
+          datasets: [{ label: config.pctLabel, data: values, backgroundColor: colors }]
+        },
+        options: {
+          indexAxis: 'y',
+          scales: tab === 'academic' ? { x: { min: 0, max: 4 } } : { x: { min: 0, max: 100, ticks: { callback: (v) => v + '%' } } },
+          plugins: { legend: { display: false } }
+        }
+      });
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state">Couldn't load report: ${err.message}</div>`;
+    }
+  }
+
+  function openBlock(tab, block) {
+    activeBlock[tab] = block;
+    render();
+  }
+
+  function closeBlock(tab) {
+    activeBlock[tab] = null;
+    render();
+  }
+
+  async function renderDetail(tab, block) {
+    const config = REPORT_CONFIG[tab];
+    const container = document.getElementById('tabContent');
+    container.innerHTML = '<div class="empty-state">Loading...</div>';
+    try {
+      const data = await apiGet(`${config.endpoint}?block=${encodeURIComponent(block)}`);
+
+      let statsHtml = `
+        <div class="card stat-card" style="background:#E3ECFB;">
+          <div class="stat-value" style="color:var(--gov-blue);">${data.totalInspections}</div>
+          <div class="stat-label">Inspections</div>
+        </div>`;
+
+      if (tab === 'academic') {
+        statsHtml += `
+          <div class="card stat-card" style="background:${data.avgScore >= 3 ? 'var(--gov-green-bg)' : data.avgScore >= 2 ? 'var(--gov-amber-bg)' : 'var(--gov-red-bg)'};">
+            <div class="stat-value" style="color:${data.avgScore >= 3 ? 'var(--gov-green)' : data.avgScore >= 2 ? 'var(--gov-amber)' : 'var(--gov-red)'};">${data.avgLabel || '—'}</div>
+            <div class="stat-label">Avg Rating (${data.avgScore ?? '—'}/4)</div>
+          </div>
+          <div class="card stat-card" style="background:#F0F0F0;">
+            <div class="stat-value" style="font-size:15px;color:var(--text-primary);">R ${data.skillBreakdown.reading ?? '—'} · W ${data.skillBreakdown.writing ?? '—'} · M ${data.skillBreakdown.math ?? '—'}</div>
+            <div class="stat-label">Skill Breakdown (out of 4)</div>
+          </div>`;
+      } else {
+        statsHtml += `
+          <div class="card stat-card" style="background:${pctClass(data.avgAttendancePercent) === 'pct-good' ? 'var(--gov-green-bg)' : pctClass(data.avgAttendancePercent) === 'pct-mid' ? 'var(--gov-amber-bg)' : 'var(--gov-red-bg)'};">
+            <div class="stat-value" style="color:${pctClass(data.avgAttendancePercent) === 'pct-good' ? 'var(--gov-green)' : pctClass(data.avgAttendancePercent) === 'pct-mid' ? 'var(--gov-amber)' : 'var(--gov-red)'};">${data.avgAttendancePercent !== null ? data.avgAttendancePercent + '%' : '—'}</div>
+            <div class="stat-label">${config.pctLabel}</div>
+          </div>`;
+        if (config.hasUnauthorizedLeave) {
+          statsHtml += `
+            <div class="card stat-card" style="background:${data.totalUnauthorizedLeave > 0 ? 'var(--gov-red-bg)' : 'var(--gov-green-bg)'};">
+              <div class="stat-value" style="color:${data.totalUnauthorizedLeave > 0 ? 'var(--gov-red)' : 'var(--gov-green)'};">${data.totalUnauthorizedLeave}</div>
+              <div class="stat-label">Unauthorized Leaves (total)</div>
+            </div>`;
+        }
+      }
+
+      const schoolsSorted = data.schools;
+      const schoolRows = schoolsSorted.map((s, i) => {
+        const rank = i + 1;
+        const isTop = rank <= 3 && schoolsSorted.length > 3;
+        const isBottom = rank > schoolsSorted.length - 3 && schoolsSorted.length > 3;
+        const pctDisplay = tab === 'academic'
+          ? `<span class="pct-badge ${pctClass((s.score / 4) * 100)}">${s.label} (${s.score})</span>`
+          : `<span class="pct-badge ${pctClass(s[config.schoolPctField])}">${s[config.schoolPctField] !== null ? s[config.schoolPctField] + '%' : '—'}</span>`;
+        return `
+          <div class="school-row">
+            <div><span class="rank-badge ${isTop ? 'top' : isBottom ? 'bottom' : ''}">${rank}</span></div>
+            <div>${escapeHtml(s.schoolName)}</div>
+            <div>${pctDisplay}</div>
+            <div style="font-size:12px;color:var(--text-secondary);">${config.schoolExtra(s)}</div>
+          </div>`;
+      }).join('');
+
+      container.innerHTML = `
+        <button class="back-link-btn" onclick="closeBlock('${tab}')">&larr; Back to all blocks</button>
+        <h2 style="font-size:17px;margin:0 0 4px;">${escapeHtml(block)} — ${config.title}</h2>
+        <p style="font-size:13px;color:var(--text-secondary);margin:0 0 16px;">Schools ranked best to worst, and the trend over time for this block.</p>
+
+        <div class="detail-stats">${statsHtml}</div>
+
+        <div class="card" style="margin-bottom:20px;">
+          <h3 style="font-size:14px;margin:0 0 4px;">Trend Over Time</h3>
+          <p style="font-size:12px;color:var(--text-secondary);margin:0 0 14px;">${config.trendLabel}, by month.</p>
+          <canvas id="trendChart" style="max-height:260px;"></canvas>
+        </div>
+
+        <h3 style="font-size:14px;margin:0 0 12px;">Schools — Best to Worst</h3>
+        <div class="card" style="padding:0; overflow:hidden;">
+          <div class="school-row header"><div>#</div><div>School</div><div>${tab === 'academic' ? 'Rating' : config.pctLabel}</div><div>${tab === 'teacher' ? 'Unauthorized Leave' : tab === 'student' ? 'Present/Enrolled' : 'Skill Breakdown'}</div></div>
+          ${schoolRows || '<div class="empty-state">No schools yet.</div>'}
+        </div>
+      `;
+
+      const chartId = 'trendChart';
+      if (chartInstances[chartId]) chartInstances[chartId].destroy();
+      chartInstances[chartId] = new Chart(document.getElementById(chartId), {
+        type: 'line',
+        data: {
+          labels: data.trend.map((t) => t.month),
+          datasets: [{
+            label: config.trendLabel,
+            data: data.trend.map((t) => t[config.trendField]),
+            borderColor: '#1E4FA3',
+            backgroundColor: '#1E4FA3',
+            tension: 0.2
+          }]
+        },
+        options: {
+          scales: tab === 'academic' ? { y: { min: 0, max: 4 } } : { y: { min: 0, max: 100, ticks: { callback: (v) => v + '%' } } }
+        }
+      });
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state">Couldn't load detail: ${err.message}</div>`;
+    }
+  }
+
+  render();
+</script>
+</body>
+</html>

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -23,6 +23,7 @@
     <nav>
       <a href="dashboard.html">Inspections</a>
       <a href="reports.html" class="admin-only-nav active" style="display:none;">Reports</a>
+      <a href="attendance-reports.html" class="admin-only-nav" style="display:none;">Attendance &amp; Academics</a>
       <a href="assignments.html" class="admin-only-nav" style="display:none;">Assignments</a>
       <a href="admins.html" class="admin-only-nav" style="display:none;">Admins</a>
       <a href="officers.html" class="admin-only-nav" style="display:none;">Officers</a>
@@ -64,12 +65,6 @@
 <script>
   requireAdmin();
   renderSidebarFooter();
-
-  if (typeof Chart === 'undefined') {
-    document.getElementById('reportContent').innerHTML =
-      '<div class="empty-state">The charting library didn\'t load — check your internet connection and refresh the page. If this keeps happening, the CDN link may need updating.</div>';
-    throw new Error('Chart.js failed to load from CDN');
-  }
 
   let gradeChart, indicatorChart, trendChart;
   let allSchoolsForFilters = [];
