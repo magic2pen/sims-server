@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIMS Portal — Officers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="tripura_emblem.png" alt="" onerror="this.style.display='none'">
+      <div>
+        <div class="name">SIMS Portal</div>
+        <div class="sub">West Tripura</div>
+      </div>
+    </div>
+    <nav>
+      <a href="dashboard.html">Inspections</a>
+      <a href="reports.html" class="admin-only-nav" style="display:none;">Reports</a>
+      <a href="assignments.html" class="admin-only-nav" style="display:none;">Assignments</a>
+      <a href="admins.html" class="admin-only-nav" style="display:none;">Admins</a>
+      <a href="officers.html" class="admin-only-nav active" style="display:none;">Officers</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="officer-name" id="sidebarOfficerName">—</div>
+      <div class="officer-role" id="sidebarOfficerRole">—</div>
+      <button id="sidebarLogoutBtn">Sign Out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <h1 class="page-title">Field Officers</h1>
+    <p class="page-subtitle">Create inspecting-officer (app login) accounts within your jurisdiction. Designation is free text — type any post.</p>
+
+    <div class="card" style="margin-bottom:24px;">
+      <h2 style="font-size:15px; margin:0 0 16px;">Create a New Officer</h2>
+      <div id="createError" class="login-error-inline" style="display:none;"></div>
+      <form id="createOfficerForm">
+        <div class="form-grid">
+          <div class="field">
+            <label>Officer ID</label>
+            <input id="fOfficerId" placeholder="e.g. OFF-0012" required>
+          </div>
+          <div class="field">
+            <label>Full Name</label>
+            <input id="fName" required>
+          </div>
+          <div class="field">
+            <label>Designation (type any post)</label>
+            <input id="fDesignation" placeholder="e.g. Deputy Inspector of Schools" required>
+          </div>
+          <div class="field">
+            <label>Department</label>
+            <input id="fDepartment" placeholder="e.g. Education">
+          </div>
+          <div class="field">
+            <label>District</label>
+            <input id="fDistrict" placeholder="e.g. West Tripura" required>
+          </div>
+          <div class="field">
+            <label>Subdivision</label>
+            <input id="fSubdivision" placeholder="e.g. Sadar Subdivision">
+          </div>
+          <div class="field">
+            <label>Block</label>
+            <input id="fBlock" placeholder="e.g. Jirania RD Block" required>
+          </div>
+          <div class="field">
+            <label>Mobile Number</label>
+            <input id="fMobile" placeholder="e.g. 9876543210">
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input id="fEmail" type="email" required>
+          </div>
+          <div class="field">
+            <label>Office</label>
+            <input id="fOffice" placeholder="e.g. Jirania RD Block Office">
+          </div>
+          <div class="field">
+            <label>Username (for app login)</label>
+            <input id="fUsername" required>
+          </div>
+          <div class="field">
+            <label>Password (for app login)</label>
+            <input id="fPassword" type="password" required>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="createBtn">Create Officer Account</button>
+      </form>
+    </div>
+
+    <h2 style="font-size:15px; margin:0 0 12px;">Officers You Manage</h2>
+    <div class="card" style="padding:0; overflow:hidden;">
+      <div id="listContainer">
+        <div class="empty-state">Loading...</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<style>
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; margin-bottom: 18px; }
+  @media (max-width: 720px) { .form-grid { grid-template-columns: 1fr; } }
+  .field label { display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; }
+  .field input, .field select {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px;
+  }
+  .login-error-inline { background: var(--gov-red-bg); color: var(--gov-red); font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; }
+  .officer-table-row {
+    display: grid;
+    grid-template-columns: 1.2fr 1.3fr 1fr 1fr 0.7fr;
+    gap: 10px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    align-items: center;
+  }
+  .officer-table-row:last-child { border-bottom: none; }
+  .officer-table-row.header { font-weight: 700; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; background: #FAFBFF; }
+  .status-pill { display:inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+  .status-active { background: var(--gov-green-bg); color: var(--gov-green); }
+  .status-inactive { background: var(--gov-red-bg); color: var(--gov-red); }
+</style>
+
+<script src="portal.js"></script>
+<script>
+  requireAdmin();
+  renderSidebarFooter();
+
+  async function loadOfficersList() {
+    const container = document.getElementById('listContainer');
+    try {
+      const officers = await apiGet('/api/officers');
+      if (officers.length === 0) {
+        container.innerHTML = '<div class="empty-state">No officers created yet. Use the form above.</div>';
+        return;
+      }
+      const header = `
+        <div class="officer-table-row header">
+          <div>Name</div><div>Designation</div><div>Jurisdiction</div><div>Username</div><div>Status</div>
+        </div>`;
+      const rows = officers.map(o => `
+        <div class="officer-table-row">
+          <div>${escapeHtml(o.name)}</div>
+          <div>${escapeHtml(o.designation || '')}</div>
+          <div>${escapeHtml([o.block, o.subdivision, o.district].filter(Boolean).join(', '))}</div>
+          <div class="data" style="font-size:12px;">${escapeHtml(o.username || '')}</div>
+          <div><span class="status-pill status-${o.status === 'active' ? 'active' : 'inactive'}">${escapeHtml(o.status)}</span></div>
+        </div>`).join('');
+      container.innerHTML = header + rows;
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state">Couldn't load officers: ${err.message}</div>`;
+    }
+  }
+
+  document.getElementById('createOfficerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorBox = document.getElementById('createError');
+    const btn = document.getElementById('createBtn');
+    errorBox.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+    try {
+      await apiPost('/api/officers', {
+        officerId: document.getElementById('fOfficerId').value,
+        name: document.getElementById('fName').value,
+        designation: document.getElementById('fDesignation').value,
+        department: document.getElementById('fDepartment').value,
+        district: document.getElementById('fDistrict').value,
+        subdivision: document.getElementById('fSubdivision').value,
+        block: document.getElementById('fBlock').value,
+        mobileNumber: document.getElementById('fMobile').value,
+        email: document.getElementById('fEmail').value,
+        office: document.getElementById('fOffice').value,
+        username: document.getElementById('fUsername').value,
+        password: document.getElementById('fPassword').value
+      });
+      document.getElementById('createOfficerForm').reset();
+      loadOfficersList();
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Create Officer Account';
+    }
+  });
+
+  loadOfficersList();
+</script>
+</body>
+</html>

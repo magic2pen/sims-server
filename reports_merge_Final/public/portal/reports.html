@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIMS Portal — Reports</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="tripura_emblem.png" alt="" onerror="this.style.display='none'">
+      <div>
+        <div class="name">SIMS Portal</div>
+        <div class="sub">West Tripura</div>
+      </div>
+    </div>
+    <nav>
+      <a href="dashboard.html">Inspections</a>
+      <a href="reports.html" class="admin-only-nav active" style="display:none;">Reports</a>
+      <a href="assignments.html" class="admin-only-nav" style="display:none;">Assignments</a>
+      <a href="admins.html" class="admin-only-nav" style="display:none;">Admins</a>
+      <a href="officers.html" class="admin-only-nav" style="display:none;">Officers</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="officer-name" id="sidebarOfficerName">—</div>
+      <div class="officer-role" id="sidebarOfficerRole">—</div>
+      <button id="sidebarLogoutBtn">Sign Out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <h1 class="page-title">Reports</h1>
+    <p class="page-subtitle">Section-wise breakdowns across every inspection in your jurisdiction — for development planning, not just record-keeping.</p>
+
+    <div class="filters">
+      <select id="districtFilter"><option value="">All Districts (within your jurisdiction)</option></select>
+      <select id="blockFilter"><option value="">All Blocks</option></select>
+    </div>
+
+    <div id="reportContent">
+      <div class="empty-state">Loading report...</div>
+    </div>
+
+    <h2 style="font-size:17px; margin:32px 0 4px;">Teacher Attendance</h2>
+    <p style="font-size:13px;color:var(--text-secondary);margin:0 0 14px;">By Block. Click a block for the full breakdown, including unauthorized leave.</p>
+    <div id="teacherContent"><div class="empty-state">Loading...</div></div>
+
+    <h2 style="font-size:17px; margin:32px 0 4px;">Student Attendance</h2>
+    <p style="font-size:13px;color:var(--text-secondary);margin:0 0 14px;">By Block, computed from every class's enrolled/present counts.</p>
+    <div id="studentContent"><div class="empty-state">Loading...</div></div>
+
+    <h2 style="font-size:17px; margin:32px 0 4px;">Academic Performance</h2>
+    <p style="font-size:13px;color:var(--text-secondary);margin:0 0 14px;">By Block, averaging Learning Outcome, Reading, Writing, and Math ratings.</p>
+    <div id="academicContent"><div class="empty-state">Loading...</div></div>
+  </main>
+</div>
+
+<style>
+  .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+  @media (max-width: 900px) { .report-grid { grid-template-columns: 1fr; } }
+  .chart-card { background: var(--card); border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .chart-card h3 { font-size: 14px; margin: 0 0 4px; }
+  .chart-card .chart-note { font-size: 12px; color: var(--text-secondary); margin: 0 0 14px; }
+  .chart-card.full { grid-column: 1 / -1; }
+  canvas { max-height: 320px; }
+  .big-stat { font-family: 'IBM Plex Mono', monospace; font-size: 40px; font-weight: 700; color: var(--gov-blue); }
+
+  .overview-row {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr 1fr 1fr;
+    gap: 10px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    align-items: center;
+    cursor: pointer;
+  }
+  .overview-row:hover { background: #FAFBFF; }
+  .overview-row.header { font-weight: 700; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; background: #FAFBFF; cursor: default; }
+  .overview-row.header:hover { background: #FAFBFF; }
+
+  .pct-badge { font-family: 'IBM Plex Mono', monospace; font-weight: 700; padding: 3px 10px; border-radius: 20px; display:inline-block; }
+  .pct-good { background: var(--gov-green-bg); color: var(--gov-green); }
+  .pct-mid { background: var(--gov-amber-bg); color: var(--gov-amber); }
+  .pct-bad { background: var(--gov-red-bg); color: var(--gov-red); }
+
+  .school-row {
+    display: grid;
+    grid-template-columns: 0.4fr 1.4fr 1fr 1fr;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    align-items: center;
+  }
+  .school-row.header { font-weight: 700; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; background: #FAFBFF; }
+  .rank-badge {
+    width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; background: #F0F0F0; color: var(--text-secondary);
+  }
+  .rank-badge.top { background: var(--gov-green-bg); color: var(--gov-green); }
+  .rank-badge.bottom { background: var(--gov-red-bg); color: var(--gov-red); }
+
+  .detail-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 14px; margin-bottom: 20px; }
+  .back-link-btn { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; margin-bottom:16px; cursor:pointer; color: var(--gov-blue); background:none; border:none; font-family: inherit; padding:0; }
+</style>
+
+<script src="portal.js"></script>
+<script>
+  requireAdmin();
+  renderSidebarFooter();
+
+  let gradeChart, indicatorChart, trendChart;
+  let allSchoolsForFilters = [];
+
+  const GRADE_COLORS = {
+    'A+': '#1E8A4C', 'A': '#39A65E', 'B+': '#1E4FA3', 'B': '#4C77C4',
+    'C': '#B8860B', 'D': '#D08A1E', 'Poor': '#D32F2F'
+  };
+
+  function indicatorColor(percent) {
+    if (percent === null) return '#CBD5E1';
+    if (percent >= 80) return '#1E8A4C';
+    if (percent >= 50) return '#B8860B';
+    return '#D32F2F';
+  }
+
+  async function loadFilterOptions() {
+    try {
+      const schools = await apiGet('/api/schools');
+      allSchoolsForFilters = schools;
+      const districtSel = document.getElementById('districtFilter');
+      const districts = [...new Set(schools.map(s => s.district).filter(Boolean))].sort();
+      districts.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d; opt.textContent = d;
+        districtSel.appendChild(opt);
+      });
+    } catch (err) {
+      // Filters are a nice-to-have; report still loads without them.
+    }
+  }
+
+  function updateBlockOptions() {
+    const district = document.getElementById('districtFilter').value;
+    const blockSel = document.getElementById('blockFilter');
+    blockSel.innerHTML = '<option value="">All Blocks</option>';
+    const source = district ? allSchoolsForFilters.filter(s => s.district === district) : allSchoolsForFilters;
+    const blocks = [...new Set(source.map(s => s.block).filter(Boolean))].sort();
+    blocks.forEach(b => {
+      const opt = document.createElement('option');
+      opt.value = b; opt.textContent = b;
+      blockSel.appendChild(opt);
+    });
+  }
+
+  function renderReport(data) {
+    const container = document.getElementById('reportContent');
+
+    if (data.totalInspections === 0) {
+      container.innerHTML = '<div class="empty-state">No inspections match these filters yet.</div>';
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="report-grid">
+        <div class="chart-card">
+          <h3>Total Inspections</h3>
+          <p class="chart-note">Within your jurisdiction and the filters selected above.</p>
+          <div class="big-stat">${data.totalInspections}</div>
+        </div>
+
+        <div class="chart-card">
+          <h3>Grade Distribution</h3>
+          <p class="chart-note">How schools are grading out overall (A+ through Poor).</p>
+          <canvas id="gradeChartCanvas"></canvas>
+        </div>
+
+        <div class="chart-card full">
+          <h3>Key Facility Indicators</h3>
+          <p class="chart-note">Percentage of inspected schools meeting each standard — sorted so the biggest gaps show first. This is the view meant for phased development planning.</p>
+          <canvas id="indicatorChartCanvas"></canvas>
+        </div>
+
+        <div class="chart-card full">
+          <h3>Inspections Over Time</h3>
+          <p class="chart-note">Monthly inspection volume and average grading score (out of 70).</p>
+          <canvas id="trendChartCanvas"></canvas>
+        </div>
+      </div>
+    `;
+
+    const gradeLabels = Object.keys(data.gradeDistribution);
+    const gradeValues = gradeLabels.map(g => data.gradeDistribution[g]);
+    if (gradeChart) gradeChart.destroy();
+    gradeChart = new Chart(document.getElementById('gradeChartCanvas'), {
+      type: 'doughnut',
+      data: {
+        labels: gradeLabels,
+        datasets: [{ data: gradeValues, backgroundColor: gradeLabels.map(g => GRADE_COLORS[g]) }]
+      },
+      options: { plugins: { legend: { position: 'bottom', labels: { font: { family: 'IBM Plex Sans', size: 11 } } } } }
+    });
+
+    const sortedIndicators = [...data.indicators].sort((a, b) => (a.goodPercent ?? 999) - (b.goodPercent ?? 999));
+    if (indicatorChart) indicatorChart.destroy();
+    indicatorChart = new Chart(document.getElementById('indicatorChartCanvas'), {
+      type: 'bar',
+      data: {
+        labels: sortedIndicators.map(i => i.label),
+        datasets: [{
+          label: '% Meeting Standard',
+          data: sortedIndicators.map(i => i.goodPercent),
+          backgroundColor: sortedIndicators.map(i => indicatorColor(i.goodPercent))
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        scales: { x: { min: 0, max: 100, ticks: { callback: (v) => v + '%' } } },
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    if (trendChart) trendChart.destroy();
+    trendChart = new Chart(document.getElementById('trendChartCanvas'), {
+      type: 'line',
+      data: {
+        labels: data.monthlyTrend.map(m => m.month),
+        datasets: [
+          {
+            label: 'Inspections',
+            data: data.monthlyTrend.map(m => m.count),
+            borderColor: '#1E4FA3',
+            backgroundColor: '#1E4FA3',
+            yAxisID: 'y'
+          },
+          {
+            label: 'Avg Grading Score (out of 70)',
+            data: data.monthlyTrend.map(m => m.avgGradeScore),
+            borderColor: '#1E8A4C',
+            backgroundColor: '#1E8A4C',
+            yAxisID: 'y1'
+          }
+        ]
+      },
+      options: {
+        scales: {
+          y: { type: 'linear', position: 'left', title: { display: true, text: 'Inspections' } },
+          y1: { type: 'linear', position: 'right', min: 0, max: 70, grid: { drawOnChartArea: false }, title: { display: true, text: 'Avg Score' } }
+        }
+      }
+    });
+  }
+
+  async function loadReport() {
+    const container = document.getElementById('reportContent');
+    container.innerHTML = '<div class="empty-state">Loading report...</div>';
+    const district = document.getElementById('districtFilter').value;
+    const block = document.getElementById('blockFilter').value;
+    const params = new URLSearchParams();
+    if (district) params.set('district', district);
+    if (block) params.set('block', block);
+    try {
+      const data = await apiGet(`/api/reports/summary?${params.toString()}`);
+      renderReport(data);
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state">Couldn't load report: ${err.message}</div>`;
+    }
+  }
+
+  document.getElementById('districtFilter').addEventListener('change', () => {
+    updateBlockOptions();
+    loadReport();
+  });
+  document.getElementById('blockFilter').addEventListener('change', loadReport);
+
+  // ================================================================
+  // Teacher Attendance / Student Attendance / Academic Performance
+  // Each is its own independent section — separate state, separate
+  // charts (canvas IDs are suffixed per section so they don't collide).
+  // ================================================================
+
+  const ATTENDANCE_CONFIG = {
+    teacher: {
+      endpoint: '/api/reports/teacher-attendance',
+      title: 'Teacher Attendance',
+      containerId: 'teacherContent',
+      pctLabel: 'Avg Attendance',
+      hasUnauthorizedLeave: true,
+      schoolPctField: 'attendancePercent',
+      schoolExtra: (s) => `${s.unauthorizedLeave > 0 ? `<span style="color:var(--gov-red);">${s.unauthorizedLeave} unauthorized leave(s)</span>` : '—'}`,
+      trendField: 'avgAttendancePercent',
+      trendLabel: 'Avg Attendance %'
+    },
+    student: {
+      endpoint: '/api/reports/student-attendance',
+      title: 'Student Attendance',
+      containerId: 'studentContent',
+      pctLabel: 'Avg Attendance',
+      hasUnauthorizedLeave: false,
+      schoolPctField: 'attendancePercent',
+      schoolExtra: (s) => `${s.totalPresent}/${s.totalEnrolled} present`,
+      trendField: 'avgAttendancePercent',
+      trendLabel: 'Avg Attendance %'
+    },
+    academic: {
+      endpoint: '/api/reports/academic-performance',
+      title: 'Academic Performance',
+      containerId: 'academicContent',
+      pctLabel: 'Avg Rating',
+      hasUnauthorizedLeave: false,
+      schoolPctField: null,
+      schoolExtra: (s) => `R: ${s.reading ?? '—'} · W: ${s.writing ?? '—'} · M: ${s.math ?? '—'} (out of 4)`,
+      trendField: 'avgScore',
+      trendLabel: 'Avg Score (out of 4)'
+    }
+  };
+
+  let attendanceBlock = { teacher: null, student: null, academic: null };
+  let attendanceCharts = {};
+
+  function pctClass(pct) {
+    if (pct === null || pct === undefined) return 'pct-mid';
+    if (pct >= 80) return 'pct-good';
+    if (pct >= 50) return 'pct-mid';
+    return 'pct-bad';
+  }
+
+  async function renderAttendanceSection(tab) {
+    const block = attendanceBlock[tab];
+    if (block) await renderAttendanceDetail(tab, block);
+    else await renderAttendanceOverview(tab);
+  }
+
+  async function renderAttendanceOverview(tab) {
+    const config = ATTENDANCE_CONFIG[tab];
+    const container = document.getElementById(config.containerId);
+    container.innerHTML = '<div class="empty-state">Loading...</div>';
+    try {
+      const data = await apiGet(config.endpoint);
+      if (data.blocks.length === 0) {
+        container.innerHTML = '<div class="empty-state">No inspections with this data yet.</div>';
+        return;
+      }
+
+      const header = tab === 'academic'
+        ? `<div class="overview-row header"><div>Block</div><div>Inspections</div><div>Avg Rating</div><div></div></div>`
+        : `<div class="overview-row header"><div>Block</div><div>Inspections</div><div>${config.pctLabel}</div><div>${config.hasUnauthorizedLeave ? 'Unauthorized Leaves' : ''}</div></div>`;
+
+      const rows = data.blocks.map((b) => {
+        const pctDisplay = tab === 'academic'
+          ? `<span class="pct-badge ${pctClass((b.avgScore / 4) * 100)}">${b.avgLabel} (${b.avgScore})</span>`
+          : `<span class="pct-badge ${pctClass(b.avgAttendancePercent)}">${b.avgAttendancePercent !== null ? b.avgAttendancePercent + '%' : '—'}</span>`;
+        const extra = config.hasUnauthorizedLeave
+          ? (b.unauthorizedLeaveTotal > 0 ? `<span style="color:var(--gov-red);font-weight:600;">${b.unauthorizedLeaveTotal}</span>` : '0')
+          : '';
+        return `
+          <div class="overview-row" onclick="openAttendanceBlock('${tab}', '${b.block.replace(/'/g, "\\'")}')">
+            <div><strong>${escapeHtml(b.block)}</strong><div style="font-size:11px;color:var(--text-secondary);">${escapeHtml(b.district || '')}</div></div>
+            <div>${b.inspectionCount}</div>
+            <div>${pctDisplay}</div>
+            <div>${extra}</div>
+          </div>`;
+      }).join('');
+
+      container.innerHTML = `
+        <div class="chart-card" style="margin-bottom:16px;">
+          <canvas id="overviewChart_${tab}" style="max-height:240px;"></canvas>
+        </div>
+        <div class="chart-card" style="padding:0; overflow:hidden;">${header}${rows}</div>
+      `;
+
+      const chartId = `overviewChart_${tab}`;
+      if (attendanceCharts[chartId]) attendanceCharts[chartId].destroy();
+      const values = tab === 'academic' ? data.blocks.map((b) => b.avgScore) : data.blocks.map((b) => b.avgAttendancePercent);
+      const colorFor = (v, isAcademic) => {
+        const p = isAcademic ? (v / 4) * 100 : v;
+        return pctClass(p) === 'pct-good' ? '#1E8A4C' : pctClass(p) === 'pct-mid' ? '#B8860B' : '#D32F2F';
+      };
+      const colors = values.map((v) => colorFor(v, tab === 'academic'));
+
+      attendanceCharts[chartId] = new Chart(document.getElementById(chartId), {
+        type: 'bar',
+        data: { labels: data.blocks.map((b) => b.block), datasets: [{ label: config.pctLabel, data: values, backgroundColor: colors }] },
+        options: {
+          indexAxis: 'y',
+          scales: tab === 'academic' ? { x: { min: 0, max: 4 } } : { x: { min: 0, max: 100, ticks: { callback: (v) => v + '%' } } },
+          plugins: { legend: { display: false } }
+        }
+      });
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state">Couldn't load report: ${err.message}</div>`;
+    }
+  }
+
+  function openAttendanceBlock(tab, block) {
+    attendanceBlock[tab] = block;
+    renderAttendanceSection(tab);
+  }
+
+  function closeAttendanceBlock(tab) {
+    attendanceBlock[tab] = null;
+    renderAttendanceSection(tab);
+  }
+
+  async function renderAttendanceDetail(tab, block) {
+    const config = ATTENDANCE_CONFIG[tab];
+    const container = document.getElementById(config.containerId);
+    container.innerHTML = '<div class="empty-state">Loading...</div>';
+    try {
+      const data = await apiGet(`${config.endpoint}?block=${encodeURIComponent(block)}`);
+
+      let statsHtml = `
+        <div class="chart-card" style="background:#E3ECFB; padding:14px;">
+          <div class="stat-value" style="color:var(--gov-blue); font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:700;">${data.totalInspections}</div>
+          <div class="stat-label" style="font-size:12px;color:var(--text-secondary);">Inspections</div>
+        </div>`;
+
+      if (tab === 'academic') {
+        const c1 = data.avgScore >= 3 ? 'var(--gov-green-bg)' : data.avgScore >= 2 ? 'var(--gov-amber-bg)' : 'var(--gov-red-bg)';
+        const c1t = data.avgScore >= 3 ? 'var(--gov-green)' : data.avgScore >= 2 ? 'var(--gov-amber)' : 'var(--gov-red)';
+        statsHtml += `
+          <div class="chart-card" style="background:${c1}; padding:14px;">
+            <div style="color:${c1t}; font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:700;">${data.avgLabel || '—'}</div>
+            <div style="font-size:12px;color:var(--text-secondary);">Avg Rating (${data.avgScore ?? '—'}/4)</div>
+          </div>
+          <div class="chart-card" style="background:#F0F0F0; padding:14px;">
+            <div style="font-size:14px;color:var(--text-primary);font-weight:600;">R ${data.skillBreakdown.reading ?? '—'} · W ${data.skillBreakdown.writing ?? '—'} · M ${data.skillBreakdown.math ?? '—'}</div>
+            <div style="font-size:12px;color:var(--text-secondary);">Skill Breakdown (out of 4)</div>
+          </div>`;
+      } else {
+        const pc = pctClass(data.avgAttendancePercent);
+        const c1 = pc === 'pct-good' ? 'var(--gov-green-bg)' : pc === 'pct-mid' ? 'var(--gov-amber-bg)' : 'var(--gov-red-bg)';
+        const c1t = pc === 'pct-good' ? 'var(--gov-green)' : pc === 'pct-mid' ? 'var(--gov-amber)' : 'var(--gov-red)';
+        statsHtml += `
+          <div class="chart-card" style="background:${c1}; padding:14px;">
+            <div style="color:${c1t}; font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:700;">${data.avgAttendancePercent !== null ? data.avgAttendancePercent + '%' : '—'}</div>
+            <div style="font-size:12px;color:var(--text-secondary);">${config.pctLabel}</div>
+          </div>`;
+        if (config.hasUnauthorizedLeave) {
+          const lc = data.totalUnauthorizedLeave > 0 ? 'var(--gov-red-bg)' : 'var(--gov-green-bg)';
+          const lct = data.totalUnauthorizedLeave > 0 ? 'var(--gov-red)' : 'var(--gov-green)';
+          statsHtml += `
+            <div class="chart-card" style="background:${lc}; padding:14px;">
+              <div style="color:${lct}; font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:700;">${data.totalUnauthorizedLeave}</div>
+              <div style="font-size:12px;color:var(--text-secondary);">Unauthorized Leaves (total)</div>
+            </div>`;
+        }
+      }
+
+      const schoolsSorted = data.schools;
+      const schoolRows = schoolsSorted.map((s, i) => {
+        const rank = i + 1;
+        const isTop = rank <= 3 && schoolsSorted.length > 3;
+        const isBottom = rank > schoolsSorted.length - 3 && schoolsSorted.length > 3;
+        const pctDisplay = tab === 'academic'
+          ? `<span class="pct-badge ${pctClass((s.score / 4) * 100)}">${s.label} (${s.score})</span>`
+          : `<span class="pct-badge ${pctClass(s[config.schoolPctField])}">${s[config.schoolPctField] !== null ? s[config.schoolPctField] + '%' : '—'}</span>`;
+        return `
+          <div class="school-row">
+            <div><span class="rank-badge ${isTop ? 'top' : isBottom ? 'bottom' : ''}">${rank}</span></div>
+            <div>${escapeHtml(s.schoolName)}</div>
+            <div>${pctDisplay}</div>
+            <div style="font-size:12px;color:var(--text-secondary);">${config.schoolExtra(s)}</div>
+          </div>`;
+      }).join('');
+
+      container.innerHTML = `
+        <button class="back-link-btn" onclick="closeAttendanceBlock('${tab}')">&larr; Back to all blocks</button>
+        <h3 style="font-size:15px;margin:0 0 4px;">${escapeHtml(block)} — ${config.title}</h3>
+        <p style="font-size:12px;color:var(--text-secondary);margin:0 0 14px;">Schools ranked best to worst, and the trend over time for this block.</p>
+
+        <div class="detail-stats">${statsHtml}</div>
+
+        <div class="chart-card" style="margin-bottom:16px;">
+          <h4 style="font-size:13px;margin:0 0 4px;">Trend Over Time</h4>
+          <p style="font-size:12px;color:var(--text-secondary);margin:0 0 12px;">${config.trendLabel}, by month.</p>
+          <canvas id="trendChart_${tab}" style="max-height:220px;"></canvas>
+        </div>
+
+        <h4 style="font-size:13px;margin:0 0 10px;">Schools — Best to Worst</h4>
+        <div class="chart-card" style="padding:0; overflow:hidden;">
+          <div class="school-row header"><div>#</div><div>School</div><div>${tab === 'academic' ? 'Rating' : config.pctLabel}</div><div>${tab === 'teacher' ? 'Unauthorized Leave' : tab === 'student' ? 'Present/Enrolled' : 'Skill Breakdown'}</div></div>
+          ${schoolRows || '<div class="empty-state">No schools yet.</div>'}
+        </div>
+      `;
+
+      const chartId = `trendChart_${tab}`;
+      if (attendanceCharts[chartId]) attendanceCharts[chartId].destroy();
+      attendanceCharts[chartId] = new Chart(document.getElementById(chartId), {
+        type: 'line',
+        data: {
+          labels: data.trend.map((t) => t.month),
+          datasets: [{ label: config.trendLabel, data: data.trend.map((t) => t[config.trendField]), borderColor: '#1E4FA3', backgroundColor: '#1E4FA3', tension: 0.2 }]
+        },
+        options: { scales: tab === 'academic' ? { y: { min: 0, max: 4 } } : { y: { min: 0, max: 100, ticks: { callback: (v) => v + '%' } } } }
+      });
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state">Couldn't load detail: ${err.message}</div>`;
+    }
+  }
+
+  renderAttendanceSection('teacher');
+  renderAttendanceSection('student');
+  renderAttendanceSection('academic');
+
+  loadFilterOptions().then(loadReport);
+</script>
+</body>
+</html>
