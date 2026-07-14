@@ -25,6 +25,7 @@
       <a href="assignments.html" class="admin-only-nav" style="display:none;">Assignments</a>
       <a href="admins.html" class="admin-only-nav active" style="display:none;">Admins</a>
       <a href="officers.html" class="admin-only-nav" style="display:none;">Officers</a>
+      <a href="profile.html" class="admin-only-nav" style="display:none;">My Profile</a>
     </nav>
     <div class="sidebar-footer">
       <div class="officer-name" id="sidebarOfficerName">—</div>
@@ -35,10 +36,10 @@
 
   <main class="main">
     <h1 class="page-title">Admins</h1>
-    <p class="page-subtitle">Create and view admin accounts more junior than your own, within your jurisdiction.</p>
+    <p class="page-subtitle">Create, edit, and manage admin accounts more junior than your own, within your jurisdiction.</p>
 
     <div class="card" style="margin-bottom:24px;">
-      <h2 style="font-size:15px; margin:0 0 16px;">Create a New Admin</h2>
+      <h2 style="font-size:15px; margin:0 0 16px;" id="formTitle">Create a New Admin</h2>
       <div id="createError" class="login-error-inline" style="display:none;"></div>
       <form id="createAdminForm">
         <div class="form-grid">
@@ -51,8 +52,8 @@
             <input id="fEmail" type="email" required>
           </div>
           <div class="field">
-            <label>Password</label>
-            <input id="fPassword" type="password" required>
+            <label id="passwordLabel">Password</label>
+            <input id="fPassword" type="password">
           </div>
           <div class="field">
             <label>Designation</label>
@@ -72,6 +73,7 @@
           </div>
         </div>
         <button type="submit" class="btn btn-primary" id="createBtn">Create Admin Account</button>
+        <button type="button" class="btn btn-outline" id="cancelEditBtn" style="display:none; margin-left:8px;">Cancel</button>
       </form>
     </div>
 
@@ -94,7 +96,7 @@
   .login-error-inline { background: var(--gov-red-bg); color: var(--gov-red); font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; }
   .admin-table-row {
     display: grid;
-    grid-template-columns: 1.4fr 1.2fr 1fr 1fr;
+    grid-template-columns: 1.3fr 1.1fr 1fr 1fr 0.7fr 1.2fr;
     gap: 10px;
     padding: 13px 16px;
     border-bottom: 1px solid var(--border);
@@ -103,6 +105,14 @@
   }
   .admin-table-row:last-child { border-bottom: none; }
   .admin-table-row.header { font-weight: 700; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; background: #FAFBFF; }
+  .status-pill { display:inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+  .status-active { background: var(--gov-green-bg); color: var(--gov-green); }
+  .status-inactive { background: var(--gov-red-bg); color: var(--gov-red); }
+  .row-actions { display: flex; gap: 10px; }
+  .row-actions a { font-size: 12px; font-weight: 600; cursor: pointer; }
+  .action-edit { color: var(--gov-blue); }
+  .action-deactivate { color: var(--gov-red); }
+  .action-reactivate { color: var(--gov-green); }
 </style>
 
 <script src="portal.js"></script>
@@ -110,19 +120,26 @@
   requireAdmin();
   renderSidebarFooter();
 
+  let editingId = null;
+  let allDesignationOptions = [];
+
   async function loadDesignationOptions() {
     const sel = document.getElementById('fDesignation');
     try {
-      const options = await apiGet('/api/admins/designations');
-      if (options.length === 0) {
-        sel.innerHTML = '<option value="">No more junior posts available to create</option>';
-        document.getElementById('createBtn').disabled = true;
-        return;
-      }
-      sel.innerHTML = options.map(o => `<option value="${escapeHtml(o.designation)}">${escapeHtml(o.designation)}</option>`).join('');
+      allDesignationOptions = await apiGet('/api/admins/designations');
+      renderDesignationOptions();
     } catch (err) {
       sel.innerHTML = '<option value="">Couldn\'t load options</option>';
     }
+  }
+
+  function renderDesignationOptions(selected) {
+    const sel = document.getElementById('fDesignation');
+    if (allDesignationOptions.length === 0) {
+      sel.innerHTML = '<option value="">No more junior posts available</option>';
+      return;
+    }
+    sel.innerHTML = allDesignationOptions.map(o => `<option value="${escapeHtml(o.designation)}" ${o.designation === selected ? 'selected' : ''}>${escapeHtml(o.designation)}</option>`).join('');
   }
 
   async function loadAdminsList() {
@@ -135,7 +152,7 @@
       }
       const header = `
         <div class="admin-table-row header">
-          <div>Name</div><div>Designation</div><div>Jurisdiction</div><div>Email</div>
+          <div>Name</div><div>Designation</div><div>Jurisdiction</div><div>Email</div><div>Status</div><div></div>
         </div>`;
       const rows = admins.map(a => `
         <div class="admin-table-row">
@@ -143,6 +160,13 @@
           <div>${escapeHtml(a.designation)}</div>
           <div>${escapeHtml([a.block, a.subdivision, a.district].filter(Boolean).join(', '))}</div>
           <div class="data" style="font-size:12px;">${escapeHtml(a.email)}</div>
+          <div><span class="status-pill status-${a.status === 'active' ? 'active' : 'inactive'}">${escapeHtml(a.status || 'active')}</span></div>
+          <div class="row-actions">
+            <a class="action-edit" onclick='startEdit(${JSON.stringify(a)})'>Edit</a>
+            ${a.status === 'active'
+              ? `<a class="action-deactivate" onclick="deactivateAdmin(${a.id}, '${escapeHtml(a.name)}')">Deactivate</a>`
+              : `<a class="action-reactivate" onclick="reactivateAdmin(${a.id})">Reactivate</a>`}
+          </div>
         </div>`).join('');
       container.innerHTML = header + rows;
     } catch (err) {
@@ -150,31 +174,95 @@
     }
   }
 
+  function startEdit(admin) {
+    editingId = admin.id;
+    document.getElementById('formTitle').textContent = `Editing: ${admin.name}`;
+    document.getElementById('fName').value = admin.name;
+    document.getElementById('fEmail').value = admin.email;
+    document.getElementById('fPassword').value = '';
+    document.getElementById('passwordLabel').textContent = 'New Password (leave blank to keep unchanged)';
+    document.getElementById('fDistrict').value = admin.district || '';
+    document.getElementById('fSubdivision').value = admin.subdivision || '';
+    document.getElementById('fBlock').value = admin.block || '';
+    renderDesignationOptions(admin.designation);
+    document.getElementById('createBtn').textContent = 'Save Changes';
+    document.getElementById('cancelEditBtn').style.display = 'inline-block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function resetForm() {
+    editingId = null;
+    document.getElementById('formTitle').textContent = 'Create a New Admin';
+    document.getElementById('createAdminForm').reset();
+    document.getElementById('passwordLabel').textContent = 'Password';
+    renderDesignationOptions();
+    document.getElementById('createBtn').textContent = 'Create Admin Account';
+    document.getElementById('cancelEditBtn').style.display = 'none';
+  }
+
+  async function deactivateAdmin(id, name) {
+    if (!confirm(`Deactivate ${name}? They won't be able to sign in anymore, but their historical records stay intact. You can reactivate them anytime.`)) return;
+    try {
+      await apiDelete(`/api/admins/${id}`);
+      loadAdminsList();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  async function reactivateAdmin(id) {
+    try {
+      await apiPatch(`/api/admins/${id}`, { status: 'active' });
+      loadAdminsList();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  document.getElementById('cancelEditBtn').addEventListener('click', resetForm);
+
   document.getElementById('createAdminForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const errorBox = document.getElementById('createError');
     const btn = document.getElementById('createBtn');
     errorBox.style.display = 'none';
     btn.disabled = true;
-    btn.textContent = 'Creating...';
+    btn.textContent = editingId ? 'Saving...' : 'Creating...';
+
+    const body = {
+      name: document.getElementById('fName').value,
+      email: document.getElementById('fEmail').value,
+      designation: document.getElementById('fDesignation').value,
+      district: document.getElementById('fDistrict').value,
+      subdivision: document.getElementById('fSubdivision').value,
+      block: document.getElementById('fBlock').value
+    };
+    const password = document.getElementById('fPassword').value;
+
+    if (!editingId && !password) {
+      errorBox.textContent = 'A password is required when creating a new admin.';
+      errorBox.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Create Admin Account';
+      return;
+    }
+
     try {
-      await apiPost('/api/admins', {
-        name: document.getElementById('fName').value,
-        email: document.getElementById('fEmail').value,
-        password: document.getElementById('fPassword').value,
-        designation: document.getElementById('fDesignation').value,
-        district: document.getElementById('fDistrict').value,
-        subdivision: document.getElementById('fSubdivision').value,
-        block: document.getElementById('fBlock').value
-      });
-      document.getElementById('createAdminForm').reset();
+      if (editingId) {
+        if (password) body.password = password;
+        await apiPatch(`/api/admins/${editingId}`, body);
+      } else {
+        body.password = password;
+        await apiPost('/api/admins', body);
+      }
+      resetForm();
       loadAdminsList();
     } catch (err) {
       errorBox.textContent = err.message;
       errorBox.style.display = 'block';
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Create Admin Account';
+      btn.textContent = editingId ? 'Save Changes' : 'Create Admin Account';
     }
   });
 

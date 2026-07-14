@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIMS Portal — My Profile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="tripura_emblem.png" alt="" onerror="this.style.display='none'">
+      <div><div class="name">SIMS Portal</div><div class="sub">West Tripura</div></div>
+    </div>
+    <nav>
+      <a href="dashboard.html">Inspections</a>
+      <a href="reports.html" class="admin-only-nav" style="display:none;">Reports</a>
+      <a href="assignments.html" class="admin-only-nav" style="display:none;">Assignments</a>
+      <a href="admins.html" class="admin-only-nav" style="display:none;">Admins</a>
+      <a href="officers.html" class="admin-only-nav" style="display:none;">Officers</a>
+      <a href="profile.html" class="admin-only-nav active" style="display:none;">My Profile</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="officer-name" id="sidebarOfficerName">—</div>
+      <div class="officer-role" id="sidebarOfficerRole">—</div>
+      <button id="sidebarLogoutBtn">Sign Out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <h1 class="page-title">My Profile</h1>
+    <p class="page-subtitle">Update your own account details. Your designation and jurisdiction level can only be changed by a more senior admin.</p>
+
+    <div class="card" style="max-width: 560px;">
+      <div id="loadError" class="login-error-inline" style="display:none;"></div>
+      <div id="saveSuccess" class="save-success" style="display:none;">Saved.</div>
+      <form id="profileForm">
+        <div class="field">
+          <label>Full Name</label>
+          <input id="fName" required>
+        </div>
+        <div class="field">
+          <label>Email (used to sign in)</label>
+          <input id="fEmail" type="email" required>
+        </div>
+        <div class="field">
+          <label>New Password (leave blank to keep your current password)</label>
+          <input id="fPassword" type="password" placeholder="Leave blank to keep unchanged">
+        </div>
+        <div class="field">
+          <label>Designation</label>
+          <input id="fDesignation" disabled>
+        </div>
+        <div class="field">
+          <label>District</label>
+          <input id="fDistrict" placeholder="e.g. West Tripura">
+        </div>
+        <div class="field">
+          <label>Subdivision (only if you're SDM-level)</label>
+          <input id="fSubdivision" placeholder="Leave blank if District-level">
+        </div>
+        <div class="field">
+          <label>Block (only if you're BDO-level)</label>
+          <input id="fBlock" placeholder="Leave blank if District/Subdivision-level">
+        </div>
+        <button type="submit" class="btn btn-primary" id="saveBtn">Save Changes</button>
+      </form>
+    </div>
+  </main>
+</div>
+
+<style>
+  .field label { display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; }
+  .field { margin-bottom: 16px; }
+  .field input {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px;
+  }
+  .field input:disabled { background: #F5F6FA; color: var(--text-secondary); }
+  .login-error-inline { background: var(--gov-red-bg); color: var(--gov-red); font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; }
+  .save-success { background: var(--gov-green-bg); color: var(--gov-green); font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; }
+</style>
+
+<script src="portal.js"></script>
+<script>
+  requireAdmin();
+  renderSidebarFooter();
+
+  function loadProfile() {
+    const profile = getProfile();
+    if (!profile) return;
+    document.getElementById('fName').value = profile.name || '';
+    document.getElementById('fEmail').value = profile.email || '';
+    document.getElementById('fDesignation').value = profile.designation || '';
+    document.getElementById('fDistrict').value = profile.district || '';
+    document.getElementById('fSubdivision').value = profile.subdivision || '';
+    document.getElementById('fBlock').value = profile.block || '';
+  }
+
+  document.getElementById('profileForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorBox = document.getElementById('loadError');
+    const successBox = document.getElementById('saveSuccess');
+    const btn = document.getElementById('saveBtn');
+    errorBox.style.display = 'none';
+    successBox.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    const profile = getProfile();
+    const body = {
+      name: document.getElementById('fName').value,
+      email: document.getElementById('fEmail').value,
+      district: document.getElementById('fDistrict').value,
+      subdivision: document.getElementById('fSubdivision').value,
+      block: document.getElementById('fBlock').value
+    };
+    const password = document.getElementById('fPassword').value;
+    if (password) body.password = password;
+
+    try {
+      const updated = await apiPatch(`/api/admins/${profile.id}`, body);
+      const newProfile = { ...profile, name: updated.name, email: updated.email, district: updated.district, subdivision: updated.subdivision, block: updated.block };
+      localStorage.setItem('sims_profile', JSON.stringify(newProfile));
+      successBox.textContent = 'Saved. If you changed your email or password, use the new details next time you sign in.';
+      successBox.style.display = 'block';
+      document.getElementById('fPassword').value = '';
+      renderSidebarFooter();
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save Changes';
+    }
+  });
+
+  loadProfile();
+</script>
+</body>
+</html>

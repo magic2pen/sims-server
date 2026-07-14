@@ -25,6 +25,7 @@
       <a href="assignments.html" class="admin-only-nav" style="display:none;">Assignments</a>
       <a href="admins.html" class="admin-only-nav" style="display:none;">Admins</a>
       <a href="officers.html" class="admin-only-nav active" style="display:none;">Officers</a>
+      <a href="profile.html" class="admin-only-nav" style="display:none;">My Profile</a>
     </nav>
     <div class="sidebar-footer">
       <div class="officer-name" id="sidebarOfficerName">—</div>
@@ -35,10 +36,10 @@
 
   <main class="main">
     <h1 class="page-title">Field Officers</h1>
-    <p class="page-subtitle">Create inspecting-officer (app login) accounts within your jurisdiction. Designation is free text — type any post.</p>
+    <p class="page-subtitle">Create, edit, and manage inspecting-officer (app login) accounts within your jurisdiction. Designation is free text — type any post.</p>
 
     <div class="card" style="margin-bottom:24px;">
-      <h2 style="font-size:15px; margin:0 0 16px;">Create a New Officer</h2>
+      <h2 style="font-size:15px; margin:0 0 16px;" id="formTitle">Create a New Officer</h2>
       <div id="createError" class="login-error-inline" style="display:none;"></div>
       <form id="createOfficerForm">
         <div class="form-grid">
@@ -87,11 +88,12 @@
             <input id="fUsername" required>
           </div>
           <div class="field">
-            <label>Password (for app login)</label>
-            <input id="fPassword" type="password" required>
+            <label id="passwordLabel">Password (for app login)</label>
+            <input id="fPassword" type="password">
           </div>
         </div>
         <button type="submit" class="btn btn-primary" id="createBtn">Create Officer Account</button>
+        <button type="button" class="btn btn-outline" id="cancelEditBtn" style="display:none; margin-left:8px;">Cancel</button>
       </form>
     </div>
 
@@ -114,7 +116,7 @@
   .login-error-inline { background: var(--gov-red-bg); color: var(--gov-red); font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; }
   .officer-table-row {
     display: grid;
-    grid-template-columns: 1.2fr 1.3fr 1fr 1fr 0.7fr;
+    grid-template-columns: 1.1fr 1.2fr 1fr 1fr 0.7fr 1.2fr;
     gap: 10px;
     padding: 13px 16px;
     border-bottom: 1px solid var(--border);
@@ -126,12 +128,19 @@
   .status-pill { display:inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; }
   .status-active { background: var(--gov-green-bg); color: var(--gov-green); }
   .status-inactive { background: var(--gov-red-bg); color: var(--gov-red); }
+  .row-actions { display: flex; gap: 10px; }
+  .row-actions a { font-size: 12px; font-weight: 600; cursor: pointer; }
+  .action-edit { color: var(--gov-blue); }
+  .action-deactivate { color: var(--gov-red); }
+  .action-reactivate { color: var(--gov-green); }
 </style>
 
 <script src="portal.js"></script>
 <script>
   requireAdmin();
   renderSidebarFooter();
+
+  let editingId = null;
 
   async function loadOfficersList() {
     const container = document.getElementById('listContainer');
@@ -143,7 +152,7 @@
       }
       const header = `
         <div class="officer-table-row header">
-          <div>Name</div><div>Designation</div><div>Jurisdiction</div><div>Username</div><div>Status</div>
+          <div>Name</div><div>Designation</div><div>Jurisdiction</div><div>Username</div><div>Status</div><div></div>
         </div>`;
       const rows = officers.map(o => `
         <div class="officer-table-row">
@@ -152,6 +161,12 @@
           <div>${escapeHtml([o.block, o.subdivision, o.district].filter(Boolean).join(', '))}</div>
           <div class="data" style="font-size:12px;">${escapeHtml(o.username || '')}</div>
           <div><span class="status-pill status-${o.status === 'active' ? 'active' : 'inactive'}">${escapeHtml(o.status)}</span></div>
+          <div class="row-actions">
+            <a class="action-edit" onclick='startEdit(${JSON.stringify(o)})'>Edit</a>
+            ${o.status === 'active'
+              ? `<a class="action-deactivate" onclick="deactivateOfficer(${o.id}, '${escapeHtml(o.name)}')">Deactivate</a>`
+              : `<a class="action-reactivate" onclick="reactivateOfficer(${o.id})">Reactivate</a>`}
+          </div>
         </div>`).join('');
       container.innerHTML = header + rows;
     } catch (err) {
@@ -159,36 +174,106 @@
     }
   }
 
+  function startEdit(officer) {
+    editingId = officer.id;
+    document.getElementById('formTitle').textContent = `Editing: ${officer.name}`;
+    document.getElementById('fOfficerId').value = officer.officer_id || '';
+    document.getElementById('fOfficerId').disabled = true;
+    document.getElementById('fName').value = officer.name || '';
+    document.getElementById('fDesignation').value = officer.designation || '';
+    document.getElementById('fDepartment').value = officer.department || '';
+    document.getElementById('fDistrict').value = officer.district || '';
+    document.getElementById('fSubdivision').value = officer.subdivision || '';
+    document.getElementById('fBlock').value = officer.block || '';
+    document.getElementById('fMobile').value = officer.mobile_number || '';
+    document.getElementById('fEmail').value = officer.email || '';
+    document.getElementById('fOffice').value = officer.office || '';
+    document.getElementById('fUsername').value = officer.username || '';
+    document.getElementById('fPassword').value = '';
+    document.getElementById('passwordLabel').textContent = 'New Password (leave blank to keep unchanged)';
+    document.getElementById('createBtn').textContent = 'Save Changes';
+    document.getElementById('cancelEditBtn').style.display = 'inline-block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function resetForm() {
+    editingId = null;
+    document.getElementById('formTitle').textContent = 'Create a New Officer';
+    document.getElementById('createOfficerForm').reset();
+    document.getElementById('fOfficerId').disabled = false;
+    document.getElementById('passwordLabel').textContent = 'Password (for app login)';
+    document.getElementById('createBtn').textContent = 'Create Officer Account';
+    document.getElementById('cancelEditBtn').style.display = 'none';
+  }
+
+  async function deactivateOfficer(id, name) {
+    if (!confirm(`Deactivate ${name}? They won't be able to sign into the app anymore, but their submitted inspections stay fully intact. You can reactivate them anytime.`)) return;
+    try {
+      await apiDelete(`/api/officers/${id}`);
+      loadOfficersList();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  async function reactivateOfficer(id) {
+    try {
+      await apiPatch(`/api/officers/${id}`, { status: 'active' });
+      loadOfficersList();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  document.getElementById('cancelEditBtn').addEventListener('click', resetForm);
+
   document.getElementById('createOfficerForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const errorBox = document.getElementById('createError');
     const btn = document.getElementById('createBtn');
     errorBox.style.display = 'none';
     btn.disabled = true;
-    btn.textContent = 'Creating...';
+    btn.textContent = editingId ? 'Saving...' : 'Creating...';
+
+    const body = {
+      name: document.getElementById('fName').value,
+      designation: document.getElementById('fDesignation').value,
+      department: document.getElementById('fDepartment').value,
+      district: document.getElementById('fDistrict').value,
+      subdivision: document.getElementById('fSubdivision').value,
+      block: document.getElementById('fBlock').value,
+      mobileNumber: document.getElementById('fMobile').value,
+      email: document.getElementById('fEmail').value,
+      office: document.getElementById('fOffice').value,
+      username: document.getElementById('fUsername').value
+    };
+    const password = document.getElementById('fPassword').value;
+
+    if (!editingId && !password) {
+      errorBox.textContent = 'A password is required when creating a new officer.';
+      errorBox.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Create Officer Account';
+      return;
+    }
+
     try {
-      await apiPost('/api/officers', {
-        officerId: document.getElementById('fOfficerId').value,
-        name: document.getElementById('fName').value,
-        designation: document.getElementById('fDesignation').value,
-        department: document.getElementById('fDepartment').value,
-        district: document.getElementById('fDistrict').value,
-        subdivision: document.getElementById('fSubdivision').value,
-        block: document.getElementById('fBlock').value,
-        mobileNumber: document.getElementById('fMobile').value,
-        email: document.getElementById('fEmail').value,
-        office: document.getElementById('fOffice').value,
-        username: document.getElementById('fUsername').value,
-        password: document.getElementById('fPassword').value
-      });
-      document.getElementById('createOfficerForm').reset();
+      if (editingId) {
+        if (password) body.password = password;
+        await apiPatch(`/api/officers/${editingId}`, body);
+      } else {
+        body.officerId = document.getElementById('fOfficerId').value;
+        body.password = password;
+        await apiPost('/api/officers', body);
+      }
+      resetForm();
       loadOfficersList();
     } catch (err) {
       errorBox.textContent = err.message;
       errorBox.style.display = 'block';
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Create Officer Account';
+      btn.textContent = editingId ? 'Save Changes' : 'Create Officer Account';
     }
   });
 

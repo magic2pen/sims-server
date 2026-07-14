@@ -88,6 +88,14 @@ async function apiPatch(path, body) {
   return readResponse(res);
 }
 
+async function apiDelete(path) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${getToken()}` }
+  });
+  return readResponse(res);
+}
+
 function gradeClass(grade) {
   if (!grade) return 'grade-none';
   return 'grade-' + grade.replace('+', 'p');
