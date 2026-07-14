@@ -146,7 +146,7 @@
         return `
           <div class="school-row">
             <div><span class="rank-badge ${isTop ? 'top' : isBottom ? 'bottom' : ''}">${rank}</span></div>
-            <div>${escapeHtml(s.schoolName)}</div>
+            <div>${s.schoolId ? `<a href="school-report.html?id=${s.schoolId}" style="color:var(--gov-blue);font-weight:600;">${escapeHtml(s.schoolName)}</a>` : escapeHtml(s.schoolName)}</div>
             <div><span class="pct-badge ${pctClass(s.attendancePercent)}">${s.attendancePercent !== null ? s.attendancePercent + '%' : '—'}</span></div>
             <div style="font-size:12px;color:var(--text-secondary);">${s.unauthorizedLeave > 0 ? `<span style="color:var(--gov-red);">${s.unauthorizedLeave} unauthorized leave(s)</span>` : '—'}</div>
           </div>`;

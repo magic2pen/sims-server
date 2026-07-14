@@ -596,4 +596,62 @@ router.get('/infrastructure', requireAuth('admin'), async (req, res) => {
   }
 });
 
+// ====================================================================
+// SINGLE SCHOOL — combined teacher + student attendance
+// ====================================================================
+// GET /api/reports/school/:schoolId
+// This is what a school name links to from the "Best to Worst" lists —
+// no more digging through Inspections and downloading a PDF just to
+// see one school's numbers.
+router.get('/school/:schoolId', requireAuth('admin'), async (req, res) => {
+  try {
+    const schoolResult = await pool.query('SELECT id, name, district, subdivision, block FROM schools WHERE id = $1', [req.params.schoolId]);
+    if (schoolResult.rows.length === 0) return res.status(404).json({ error: 'School not found' });
+    const school = schoolResult.rows[0];
+
+    const adminCtx = { admin_level: req.user.adminLevel, district: req.user.district, subdivision: req.user.subdivision, block: req.user.block };
+    if (!isWithinJurisdiction(adminCtx, school)) {
+      return res.status(403).json({ error: 'This school is outside your jurisdiction.' });
+    }
+
+    const result = await pool.query(
+      'SELECT id, answers_json, uploaded_at, overall_grade FROM inspections WHERE school_id = $1 ORDER BY uploaded_at ASC',
+      [req.params.schoolId]
+    );
+    const rows = result.rows.map((r) => ({
+      ...r,
+      ta: extractTeacherAttendance(parseAnswers(r.answers_json)),
+      sa: extractStudentAttendance(parseAnswers(r.answers_json))
+    }));
+
+    const teacherRows = rows.filter((r) => r.ta.posted > 0);
+    const teacherPostedTotal = teacherRows.reduce((sum, r) => sum + r.ta.posted, 0);
+    const teacherPresentTotal = teacherRows.reduce((sum, r) => sum + r.ta.present, 0);
+    const teacherUnauthorizedTotal = teacherRows.reduce((sum, r) => sum + r.ta.unauthorizedLeave, 0);
+    const teacher = {
+      totalInspections: teacherRows.length,
+      attendancePercent: teacherPostedTotal > 0 ? Math.round((teacherPresentTotal / teacherPostedTotal) * 100) : null,
+      teachersPosted: teacherPostedTotal,
+      teachersPresent: teacherPresentTotal,
+      unauthorizedLeaveTotal: teacherUnauthorizedTotal,
+      trend: teacherRows.map((r) => ({ date: r.uploaded_at, percent: r.ta.percent, unauthorizedLeave: r.ta.unauthorizedLeave }))
+    };
+
+    const studentRows = rows.filter((r) => r.sa.totalEnr > 0);
+    let student = null;
+    if (studentRows.length > 0) {
+      const agg = aggregateStudentDetail(studentRows);
+      student = { totalInspections: studentRows.length, ...agg, trend: studentRows.map((r) => ({ date: r.uploaded_at, percent: r.sa.percent })) };
+    }
+
+    res.json({
+      schoolName: school.name, district: school.district, block: school.block,
+      totalInspections: rows.length, teacher, student
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error generating school report', detail: err.message });
+  }
+});
+
 module.exports = router;

@@ -193,7 +193,7 @@
       return `
         <div class="school-row">
           <div><span class="rank-badge ${isTop ? 'top' : isBottom ? 'bottom' : ''}">${rank}</span></div>
-          <div>${escapeHtml(s.schoolName)}</div>
+          <div>${s.schoolId ? `<a href="school-report.html?id=${s.schoolId}" style="color:var(--gov-blue);font-weight:600;">${escapeHtml(s.schoolName)}</a>` : escapeHtml(s.schoolName)}</div>
           <div><span class="pct-badge ${pctClass(s.attendancePercent)}">${s.attendancePercent !== null ? s.attendancePercent + '%' : '—'}</span></div>
           <div class="boy-tag">${s.boysPercent !== null ? s.boysPercent + '%' : '—'}</div>
           <div class="girl-tag">${s.girlsPercent !== null ? s.girlsPercent + '%' : '—'}</div>
