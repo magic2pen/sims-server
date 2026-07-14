@@ -29,6 +29,11 @@ const SUBDIVISION_BLOCKS = {
 // Subdivision has been picked yet (or isn't applicable at this level).
 const ALL_BLOCKS = Object.values(SUBDIVISION_BLOCKS).flat();
 
+// The app matches this exact string to decide which classes (I-V, I-VIII,
+// etc.) to show for student attendance — so this needs to stay a
+// dropdown too, not free text.
+const SCHOOL_CATEGORIES = ['Junior Basic School', 'Senior Basic School', 'High School', 'Higher Secondary School'];
+
 // Fills a <select> with the given options. `selected` (if provided)
 // gets pre-selected — used when pre-filling an Edit form. `placeholder`
 // is an empty first option, for fields that aren't always required.

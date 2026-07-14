@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIMS Portal — Schools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="tripura_emblem.png" alt="" onerror="this.style.display='none'">
+      <div>
+        <div class="name">SIMS Portal</div>
+        <div class="sub">West Tripura</div>
+      </div>
+    </div>
+    <nav>
+      <a href="dashboard.html">Inspections</a>
+      <a href="reports.html" class="admin-only-nav" style="display:none;">Reports</a>
+      <a href="assignments.html" class="admin-only-nav" style="display:none;">Assignments</a>
+      <a href="schools.html" class="admin-only-nav active" style="display:none;">Schools</a>
+      <a href="admins.html" class="admin-only-nav" style="display:none;">Admins</a>
+      <a href="officers.html" class="admin-only-nav" style="display:none;">Officers</a>
+      <a href="profile.html" class="admin-only-nav" style="display:none;">My Profile</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="officer-name" id="sidebarOfficerName">—</div>
+      <div class="officer-role" id="sidebarOfficerRole">—</div>
+      <button id="sidebarLogoutBtn">Sign Out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <h1 class="page-title">Schools</h1>
+    <p class="page-subtitle">Create, edit, and manage the school master list within your jurisdiction — one at a time, or in bulk via CSV.</p>
+
+    <div class="card" style="margin-bottom:24px;">
+      <h2 style="font-size:15px; margin:0 0 16px;" id="formTitle">Add a Single School</h2>
+      <div id="createError" class="login-error-inline" style="display:none;"></div>
+      <form id="createSchoolForm">
+        <div class="form-grid">
+          <div class="field">
+            <label>UDISE Code</label>
+            <input id="fUdise" placeholder="e.g. 16010100101">
+          </div>
+          <div class="field">
+            <label>School Name</label>
+            <input id="fName" required>
+          </div>
+          <div class="field">
+            <label>Category</label>
+            <select id="fCategory" required></select>
+          </div>
+          <div class="field">
+            <label>District</label>
+            <select id="fDistrict" required></select>
+          </div>
+          <div class="field">
+            <label>Subdivision</label>
+            <select id="fSubdivision"></select>
+          </div>
+          <div class="field">
+            <label>Block / Nagar Panchayat / Municipality</label>
+            <select id="fBlock" required></select>
+          </div>
+          <div class="field">
+            <label>Headmaster / Headmistress Name</label>
+            <input id="fHmName">
+          </div>
+          <div class="field">
+            <label>Headmaster / Headmistress Phone</label>
+            <input id="fHmPhone">
+          </div>
+          <div class="field" style="grid-column: 1 / -1;">
+            <label>Address (optional)</label>
+            <input id="fAddress">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="createBtn">Add School</button>
+        <button type="button" class="btn btn-outline" id="cancelEditBtn" style="display:none; margin-left:8px;">Cancel</button>
+      </form>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
+      <h2 style="font-size:15px; margin:0 0 4px;">Bulk Upload Schools (CSV)</h2>
+      <p style="font-size:12px;color:var(--text-secondary);margin:0 0 16px;">
+        Download the template, fill it in (Excel opens CSV files directly — save as CSV when done), then upload it here. Every row is checked before anything is added, so you'll see exactly what will happen first.
+      </p>
+      <button type="button" class="btn btn-outline" id="downloadTemplateBtn">⬇ Download CSV Template</button>
+      <div style="margin-top:14px;">
+        <input type="file" id="csvFileInput" accept=".csv">
+      </div>
+      <div id="csvPreviewSection" style="display:none; margin-top:18px;">
+        <h3 style="font-size:13px; margin:0 0 8px;">Preview <span id="csvSummary" style="font-weight:400; color:var(--text-secondary);"></span></h3>
+        <div id="csvPreviewTable" style="max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;"></div>
+        <button type="button" class="btn btn-primary" id="uploadCsvBtn" style="margin-top:14px;">Upload Valid Rows</button>
+        <div id="csvUploadProgress" style="margin-top:10px; font-size:13px;"></div>
+      </div>
+    </div>
+
+    <div class="filters">
+      <input type="text" id="searchInput" placeholder="Search schools by name...">
+    </div>
+
+    <h2 style="font-size:15px; margin:0 0 12px;">Schools You Manage</h2>
+    <div class="card" style="padding:0; overflow:hidden;">
+      <div id="listContainer">
+        <div class="empty-state">Loading...</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<style>
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; margin-bottom: 18px; }
+  @media (max-width: 720px) { .form-grid { grid-template-columns: 1fr; } }
+  .field label { display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; }
+  .field input, .field select {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px;
+  }
+  .login-error-inline { background: var(--gov-red-bg); color: var(--gov-red); font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; }
+  .school-table-row {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1.2fr 0.9fr 1fr;
+    gap: 10px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    align-items: center;
+  }
+  .school-table-row:last-child { border-bottom: none; }
+  .school-table-row.header { font-weight: 700; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; background: #FAFBFF; }
+  .status-pill { display:inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+  .status-active { background: var(--gov-green-bg); color: var(--gov-green); }
+  .status-inactive { background: var(--gov-red-bg); color: var(--gov-red); }
+  .row-actions { display: flex; gap: 10px; }
+  .row-actions a { font-size: 12px; font-weight: 600; cursor: pointer; }
+  .action-edit { color: var(--gov-blue); }
+  .action-deactivate { color: var(--gov-red); }
+  .action-reactivate { color: var(--gov-green); }
+
+  .csv-row { display: grid; grid-template-columns: 0.4fr 1.6fr 1fr 1fr 1fr 1.6fr; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 12px; align-items: center; }
+  .csv-row.header { font-weight: 700; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; background: #FAFBFF; position: sticky; top: 0; }
+  .csv-row.invalid { background: var(--gov-red-bg); }
+  .csv-status-ok { color: var(--gov-green); font-weight: 600; }
+  .csv-status-bad { color: var(--gov-red); font-weight: 600; }
+</style>
+
+<script src="portal.js"></script>
+<script src="jurisdictionData.js"></script>
+<script>
+  requireAdmin();
+  renderSidebarFooter();
+
+  let editingId = null;
+  let allSchools = [];
+  let csvRows = [];
+
+  function initFormDropdowns(selected) {
+    selected = selected || {};
+    populateSelect(document.getElementById('fCategory'), SCHOOL_CATEGORIES, selected.category, 'Select Category');
+    populateSelect(document.getElementById('fDistrict'), DISTRICTS, selected.district, 'Select District');
+    populateSelect(document.getElementById('fSubdivision'), SUBDIVISIONS, selected.subdivision, 'Select Subdivision');
+    populateBlockSelect(document.getElementById('fBlock'), selected.subdivision, selected.block, 'Select Block / Nagar Panchayat / Municipality');
+  }
+  document.getElementById('fSubdivision').addEventListener('change', (e) => {
+    populateBlockSelect(document.getElementById('fBlock'), e.target.value, null, 'Select Block / Nagar Panchayat / Municipality');
+  });
+
+  async function loadSchoolsList() {
+    const container = document.getElementById('listContainer');
+    try {
+      allSchools = await apiGet('/api/schools?includeInactive=true');
+      renderList();
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state">Couldn't load schools: ${err.message}</div>`;
+    }
+  }
+
+  function renderList() {
+    const search = document.getElementById('searchInput').value.trim().toLowerCase();
+    const filtered = allSchools.filter((s) => !search || s.name.toLowerCase().includes(search));
+    const container = document.getElementById('listContainer');
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty-state">No schools match. Use the form above to add one, or check your search.</div>';
+      return;
+    }
+
+    const header = `<div class="school-table-row header"><div>Name</div><div>Category</div><div>Jurisdiction</div><div>UDISE</div><div></div></div>`;
+    const rows = filtered.map((s) => `
+      <div class="school-table-row">
+        <div>${escapeHtml(s.name)}</div>
+        <div style="font-size:12px;color:var(--text-secondary);">${escapeHtml(s.category || '—')}</div>
+        <div>${escapeHtml([s.block, s.subdivision, s.district].filter(Boolean).join(', '))}</div>
+        <div class="data" style="font-size:12px;">${escapeHtml(s.udise_code || '—')}</div>
+        <div class="row-actions">
+          <a class="action-edit" onclick='startEdit(${JSON.stringify(s)})'>Edit</a>
+          ${s.status === 'active'
+            ? `<a class="action-deactivate" onclick="deactivateSchool(${s.id}, '${escapeHtml(s.name)}')">Deactivate</a>`
+            : `<a class="action-reactivate" onclick="reactivateSchool(${s.id})">Reactivate</a>`}
+        </div>
+      </div>`).join('');
+    container.innerHTML = header + rows;
+  }
+
+  function startEdit(school) {
+    editingId = school.id;
+    document.getElementById('formTitle').textContent = `Editing: ${school.name}`;
+    document.getElementById('fUdise').value = school.udise_code || '';
+    document.getElementById('fName').value = school.name || '';
+    document.getElementById('fHmName').value = school.headmaster_name || '';
+    document.getElementById('fHmPhone').value = school.headmaster_phone || '';
+    document.getElementById('fAddress').value = school.address || '';
+    initFormDropdowns({ category: school.category, district: school.district, subdivision: school.subdivision, block: school.block });
+    document.getElementById('createBtn').textContent = 'Save Changes';
+    document.getElementById('cancelEditBtn').style.display = 'inline-block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function resetForm() {
+    editingId = null;
+    document.getElementById('formTitle').textContent = 'Add a Single School';
+    document.getElementById('createSchoolForm').reset();
+    initFormDropdowns();
+    document.getElementById('createBtn').textContent = 'Add School';
+    document.getElementById('cancelEditBtn').style.display = 'none';
+  }
+
+  async function deactivateSchool(id, name) {
+    if (!confirm(`Deactivate ${name}? It will no longer appear for officers picking a school to inspect, but every past inspection there stays fully intact. You can reactivate anytime.`)) return;
+    try {
+      await apiDelete(`/api/schools/${id}`);
+      loadSchoolsList();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  async function reactivateSchool(id) {
+    try {
+      await apiPatch(`/api/schools/${id}`, { status: 'active' });
+      loadSchoolsList();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  document.getElementById('cancelEditBtn').addEventListener('click', resetForm);
+  document.getElementById('searchInput').addEventListener('input', renderList);
+
+  document.getElementById('createSchoolForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorBox = document.getElementById('createError');
+    const btn = document.getElementById('createBtn');
+    errorBox.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = editingId ? 'Saving...' : 'Adding...';
+
+    const body = {
+      udiseCode: document.getElementById('fUdise').value,
+      name: document.getElementById('fName').value,
+      category: document.getElementById('fCategory').value,
+      district: document.getElementById('fDistrict').value,
+      subdivision: document.getElementById('fSubdivision').value,
+      block: document.getElementById('fBlock').value,
+      headmasterName: document.getElementById('fHmName').value,
+      headmasterPhone: document.getElementById('fHmPhone').value,
+      address: document.getElementById('fAddress').value
+    };
+
+    try {
+      if (editingId) {
+        await apiPatch(`/api/schools/${editingId}`, body);
+      } else {
+        await apiPost('/api/schools', body);
+      }
+      resetForm();
+      loadSchoolsList();
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = editingId ? 'Save Changes' : 'Add School';
+    }
+  });
+
+  // ================================================================
+  // CSV bulk upload
+  // ================================================================
+
+  const CSV_HEADERS = ['udiseCode', 'name', 'category', 'district', 'subdivision', 'block', 'headmasterName', 'headmasterPhone', 'address'];
+
+  function downloadTemplate() {
+    const exampleRow = ['16010100101', 'Bishrambari HS School', 'High School', 'West Tripura', 'Jirania', 'Jirania', 'Full Name', '9876543210', 'Village/Locality'];
+    const csv = CSV_HEADERS.join(',') + '\n' + exampleRow.map((v) => `"${v}"`).join(',') + '\n';
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sims_schools_template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  document.getElementById('downloadTemplateBtn').addEventListener('click', downloadTemplate);
+
+  function parseCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+        else inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current); current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current);
+    return result;
+  }
+
+  function parseCSV(text) {
+    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    if (lines.length === 0) return [];
+    const headers = parseCSVLine(lines[0]).map((h) => h.trim());
+    return lines.slice(1).map((line) => {
+      const values = parseCSVLine(line);
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = (values[i] || '').trim(); });
+      return obj;
+    });
+  }
+
+  function validateRow(row) {
+    const errors = [];
+    if (!row.name) errors.push('Name is required');
+    if (!row.category) errors.push('Category is required');
+    else if (!SCHOOL_CATEGORIES.includes(row.category)) errors.push(`Category must be one of: ${SCHOOL_CATEGORIES.join(', ')}`);
+    if (!row.district) errors.push('District is required');
+    else if (!DISTRICTS.includes(row.district)) errors.push(`District must be one of: ${DISTRICTS.join(', ')}`);
+    if (row.subdivision && !SUBDIVISIONS.includes(row.subdivision)) errors.push(`Subdivision must be one of: ${SUBDIVISIONS.join(', ')} (or leave blank)`);
+    if (!row.block) errors.push('Block / Nagar Panchayat / Municipality is required');
+    else if (!ALL_BLOCKS.includes(row.block)) errors.push('Block/Nagar Panchayat/Municipality not recognised — check spelling against the template');
+    else if (row.subdivision && SUBDIVISION_BLOCKS[row.subdivision] && !SUBDIVISION_BLOCKS[row.subdivision].includes(row.block)) {
+      errors.push(`${row.block} is not part of ${row.subdivision} Subdivision`);
+    }
+    return errors;
+  }
+
+  function renderCsvPreview() {
+    const validCount = csvRows.filter((r) => r.errors.length === 0).length;
+    document.getElementById('csvSummary').textContent = `— ${csvRows.length} row(s) read, ${validCount} valid, ${csvRows.length - validCount} with problems`;
+
+    const header = `<div class="csv-row header"><div>#</div><div>School</div><div>District</div><div>Subdivision</div><div>Block</div><div>Status</div></div>`;
+    const rows = csvRows.map((r, i) => `
+      <div class="csv-row ${r.errors.length > 0 ? 'invalid' : ''}">
+        <div>${i + 1}</div>
+        <div>${escapeHtml(r.data.name || '(no name)')}</div>
+        <div>${escapeHtml(r.data.district || '—')}</div>
+        <div>${escapeHtml(r.data.subdivision || '—')}</div>
+        <div>${escapeHtml(r.data.block || '—')}</div>
+        <div>${r.errors.length === 0 ? '<span class="csv-status-ok">Ready</span>' : `<span class="csv-status-bad">${escapeHtml(r.errors.join('; '))}</span>`}</div>
+      </div>`).join('');
+    document.getElementById('csvPreviewTable').innerHTML = header + rows;
+    document.getElementById('csvPreviewSection').style.display = 'block';
+    document.getElementById('uploadCsvBtn').disabled = validCount === 0;
+  }
+
+  document.getElementById('csvFileInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const parsed = parseCSV(evt.target.result);
+      csvRows = parsed.map((data) => ({ data, errors: validateRow(data) }));
+      renderCsvPreview();
+    };
+    reader.readAsText(file);
+  });
+
+  document.getElementById('uploadCsvBtn').addEventListener('click', async () => {
+    const validRows = csvRows.filter((r) => r.errors.length === 0);
+    const progressEl = document.getElementById('csvUploadProgress');
+    const btn = document.getElementById('uploadCsvBtn');
+    btn.disabled = true;
+    let success = 0;
+    let failed = 0;
+    const failures = [];
+
+    for (let i = 0; i < validRows.length; i++) {
+      const row = validRows[i].data;
+      progressEl.textContent = `Uploading ${i + 1} of ${validRows.length}...`;
+      try {
+        await apiPost('/api/schools', row);
+        success++;
+      } catch (err) {
+        failed++;
+        failures.push(`${row.name}: ${err.message}`);
+      }
+    }
+
+    progressEl.innerHTML = `Done — ${success} school(s) added${failed > 0 ? `, ${failed} failed` : ''}.` +
+      (failures.length > 0 ? `<br><span style="color:var(--gov-red);">${failures.map(escapeHtml).join('<br>')}</span>` : '');
+    btn.disabled = false;
+    csvRows = [];
+    document.getElementById('csvFileInput').value = '';
+    loadSchoolsList();
+  });
+
+  initFormDropdowns();
+  loadSchoolsList();
+</script>
+</body>
+</html>
