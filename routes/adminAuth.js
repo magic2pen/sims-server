@@ -24,6 +24,10 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
+    if (admin.status !== 'active') {
+      return res.status(403).json({ error: 'This account has been deactivated. Contact a senior admin if this is unexpected.' });
+    }
+
     const profile = {
       id: admin.id,
       name: admin.name,
@@ -39,7 +43,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign(
       { role: 'admin', ...profile },
       process.env.JWT_SECRET,
-      { expiresIn: '12h' }
+      { expiresIn: '30d' }
     );
 
     res.json({ token, admin: profile });

@@ -79,12 +79,37 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PATCH /api/officers/:id — edit an officer, including activating/deactivating
+// PATCH /api/officers/:id — edit an officer within your jurisdiction
+// (same rule as who can see them). Now also supports a password reset.
 router.patch('/:id', async (req, res) => {
   const { id } = req.params;
+
+  try {
+    const targetResult = await pool.query('SELECT * FROM officers WHERE id = $1', [id]);
+    if (targetResult.rows.length === 0) return res.status(404).json({ error: 'Officer not found' });
+    const target = targetResult.rows[0];
+    const creatorCtx = { admin_level: req.user.adminLevel, district: req.user.district, subdivision: req.user.subdivision, block: req.user.block };
+    if (!isWithinJurisdiction(creatorCtx, target)) {
+      return res.status(403).json({ error: 'You can only edit officer accounts within your own jurisdiction.' });
+    }
+    if (req.body.district !== undefined || req.body.subdivision !== undefined || req.body.block !== undefined) {
+      const newLocation = {
+        district: req.body.district !== undefined ? req.body.district : target.district,
+        subdivision: req.body.subdivision !== undefined ? req.body.subdivision : target.subdivision,
+        block: req.body.block !== undefined ? req.body.block : target.block
+      };
+      if (!isWithinJurisdiction(creatorCtx, newLocation)) {
+        return res.status(403).json({ error: 'You cannot move this officer to a location outside your own jurisdiction.' });
+      }
+    }
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+
   const allowedFields = [
     'employee_code', 'name', 'designation', 'department', 'district',
-    'subdivision', 'block', 'mobile_number', 'email', 'office', 'status'
+    'subdivision', 'block', 'mobile_number', 'email', 'office', 'status', 'username'
   ];
   const updates = [];
   const params = [];
@@ -95,6 +120,12 @@ router.patch('/:id', async (req, res) => {
       params.push(req.body[camelCase]);
       updates.push(`${field} = $${params.length}`);
     }
+  }
+
+  if (req.body.password) {
+    const passwordHash = await bcrypt.hash(req.body.password, 10);
+    params.push(passwordHash);
+    updates.push(`password_hash = $${params.length}`);
   }
 
   if (updates.length === 0) {
@@ -110,8 +141,31 @@ router.patch('/:id', async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'Officer not found' });
     res.json(result.rows[0]);
   } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'An officer with this Officer ID, email, or username already exists' });
+    }
     console.error(err);
     res.status(500).json({ error: 'Server error updating officer' });
+  }
+});
+
+// DELETE /api/officers/:id — deactivates (does not permanently remove —
+// their historical inspections stay fully intact and attributed).
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const targetResult = await pool.query('SELECT * FROM officers WHERE id = $1', [id]);
+    if (targetResult.rows.length === 0) return res.status(404).json({ error: 'Officer not found' });
+    const target = targetResult.rows[0];
+    const creatorCtx = { admin_level: req.user.adminLevel, district: req.user.district, subdivision: req.user.subdivision, block: req.user.block };
+    if (!isWithinJurisdiction(creatorCtx, target)) {
+      return res.status(403).json({ error: 'You can only remove officer accounts within your own jurisdiction.' });
+    }
+    await pool.query('UPDATE officers SET status = $1 WHERE id = $2', ['inactive', id]);
+    res.json({ success: true, message: 'Officer account deactivated.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error deactivating officer' });
   }
 });
 
