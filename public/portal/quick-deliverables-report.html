@@ -83,6 +83,9 @@
   .deliv-toggle button.active-without { background: var(--gov-red-bg); color: var(--gov-red); border-color: var(--gov-red); }
   .deliv-toggle button.active-with { background: var(--gov-green-bg); color: var(--gov-green); border-color: var(--gov-green); }
   .deliv-list { max-height: 220px; overflow-y: auto; font-size: 12px; }
+  .deliv-list-heading { font-size: 11px; font-weight: 800; letter-spacing: 0.02em; padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; display: inline-block; }
+  .deliv-list-heading.heading-bad { background: var(--gov-red-bg); color: var(--gov-red); }
+  .deliv-list-heading.heading-good { background: var(--gov-green-bg); color: var(--gov-green); }
   .deliv-list-item { padding: 6px 0; border-bottom: 1px solid #F0F2F6; display: flex; justify-content: space-between; }
   .deliv-list-item:last-child { border-bottom: none; }
   .deliv-list-item .school-block { color: var(--text-secondary); font-size: 11px; }
@@ -201,8 +204,14 @@
             <button class="active-without" onclick="toggleDelivList('${d.id}', 'without')">Without (${d.schoolsWithout.length})</button>
             <button onclick="toggleDelivList('${d.id}', 'with')">With (${d.schoolsWith.length})</button>
           </div>
-          <div class="deliv-list" id="deliv-${d.id}-without">${schoolListHtml(d.schoolsWithout, 'Every school has this — nothing to flag.')}</div>
-          <div class="deliv-list hidden-list" id="deliv-${d.id}-with" style="display:none;">${schoolListHtml(d.schoolsWith, 'No school currently has this.')}</div>
+          <div class="deliv-section" id="deliv-${d.id}-without-section">
+            <div class="deliv-list-heading heading-bad">✖ NOT AVAILABLE — ${d.schoolsWithout.length} school(s)</div>
+            <div class="deliv-list" id="deliv-${d.id}-without">${schoolListHtml(d.schoolsWithout, 'Every school has this — nothing to flag.')}</div>
+          </div>
+          <div class="deliv-section hidden-list" id="deliv-${d.id}-with-section" style="display:none;">
+            <div class="deliv-list-heading heading-good">✔ AVAILABLE — ${d.schoolsWith.length} school(s)</div>
+            <div class="deliv-list" id="deliv-${d.id}-with">${schoolListHtml(d.schoolsWith, 'No school currently has this.')}</div>
+          </div>
         `;
       } else if (d.type === 'RATIO_PERCENT') {
         bodyHtml = `
@@ -210,8 +219,14 @@
             <button class="active-without" onclick="toggleDelivList('${d.id}', 'without')">Needs Attention (${d.schoolsNeedsAttention.length})</button>
             <button onclick="toggleDelivList('${d.id}', 'with')">Good — 80%+ (${d.schoolsGood.length})</button>
           </div>
-          <div class="deliv-list" id="deliv-${d.id}-without">${schoolListHtml(d.schoolsNeedsAttention, 'No schools below 80% — all in good shape.')}</div>
-          <div class="deliv-list hidden-list" id="deliv-${d.id}-with" style="display:none;">${schoolListHtml(d.schoolsGood, 'No schools at 80% or above yet.')}</div>
+          <div class="deliv-section" id="deliv-${d.id}-without-section">
+            <div class="deliv-list-heading heading-bad">✖ NEEDS ATTENTION (below 80% working) — ${d.schoolsNeedsAttention.length} school(s)</div>
+            <div class="deliv-list" id="deliv-${d.id}-without">${schoolListHtml(d.schoolsNeedsAttention, 'No schools below 80% — all in good shape.')}</div>
+          </div>
+          <div class="deliv-section hidden-list" id="deliv-${d.id}-with-section" style="display:none;">
+            <div class="deliv-list-heading heading-good">✔ GOOD (80% or more working) — ${d.schoolsGood.length} school(s)</div>
+            <div class="deliv-list" id="deliv-${d.id}-with">${schoolListHtml(d.schoolsGood, 'No schools at 80% or above yet.')}</div>
+          </div>
         `;
       } else {
         bodyHtml = d.order.map((rating) => {
@@ -245,8 +260,8 @@
   }
 
   function toggleDelivList(id, which) {
-    const withoutEl = document.getElementById(`deliv-${id}-without`);
-    const withEl = document.getElementById(`deliv-${id}-with`);
+    const withoutEl = document.getElementById(`deliv-${id}-without-section`);
+    const withEl = document.getElementById(`deliv-${id}-with-section`);
     const card = document.getElementById(`deliv-${id}`);
     const buttons = card.querySelectorAll('.deliv-toggle button');
     if (which === 'without') {
