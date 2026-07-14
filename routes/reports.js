@@ -738,6 +738,7 @@ const QUICK_DELIVERABLES = [
   { id: 'infra_drinking_water_available', label: 'Drinking Water Available', type: 'YES_NO', icon: '💧' },
   { id: 'infra_separate_toilets', label: 'Separate Toilets (Boys/Girls)', type: 'YES_NO', icon: '🚻' },
   { id: 'infra_toilets_functional', label: 'Toilets Functional', type: 'YES_NO', icon: '🚽' },
+  { id: 'infra_roof_leakage', label: 'No Roof Leakage / Seepage', type: 'YES_NO', icon: '🌧️', invertYesNo: true },
   { id: 'infra_handwashing', label: 'Handwashing Facility', type: 'YES_NO', icon: '🧼' },
   { id: 'infra_ramp_available', label: 'Ramp Available (Accessibility)', type: 'YES_NO', icon: '♿' },
   { id: 'infra_playground_available', label: 'Playground Available', type: 'YES_NO', icon: '🏃' },
@@ -761,14 +762,20 @@ function schoolRef(r) {
 
 function computeDeliverable(def, currentRows) {
   if (def.type === 'YES_NO') {
-    const schoolsWith = [];
-    const schoolsWithout = [];
+    const yesSchools = [];
+    const noSchools = [];
     currentRows.forEach((r) => {
       const answers = parseAnswers(r.answers_json);
       const val = answers[def.id] && answers[def.id].value;
-      if (val === 'Yes') schoolsWith.push(schoolRef(r));
-      else if (val === 'No') schoolsWithout.push(schoolRef(r));
+      if (val === 'Yes') yesSchools.push(schoolRef(r));
+      else if (val === 'No') noSchools.push(schoolRef(r));
     });
+    // Most of these are "Yes = has the facility = good". Roof leakage is
+    // the opposite ("Yes = has a leak = bad"), so invertYesNo flips which
+    // answer counts as the good one, for both the percentage and which
+    // list is "with" (good state) vs "without" (the problem to flag).
+    const schoolsWith = def.invertYesNo ? noSchools : yesSchools;
+    const schoolsWithout = def.invertYesNo ? yesSchools : noSchools;
     const answered = schoolsWith.length + schoolsWithout.length;
     return {
       id: def.id, label: def.label, icon: def.icon, type: def.type,
