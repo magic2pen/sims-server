@@ -37,7 +37,7 @@ function computeOverallGrade(answersJson) {
 // This is what "Final Submission and Upload" on the Pending Uploads
 // screen calls. Requires a valid OFFICER token.
 router.post('/', requireAuth('officer'), async (req, res) => {
-  const { schoolId, schoolName, district, block, dateTime, answersJson, pdfBase64 } = req.body;
+  const { schoolId, schoolName, district, block, dateTime, answersJson, pdfBase64, photosJson, signatureBase64 } = req.body;
 
   if (!schoolName || !answersJson) {
     return res.status(400).json({ error: 'schoolName and answersJson are required' });
@@ -48,10 +48,10 @@ router.post('/', requireAuth('officer'), async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO inspections
-        (officer_id, school_id, school_name, district, block, inspection_datetime, answers_json, pdf_base64, overall_grade, grade_score)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        (officer_id, school_id, school_name, district, block, inspection_datetime, answers_json, pdf_base64, overall_grade, grade_score, photos_json, signature_base64)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING id, school_name, uploaded_at`,
-      [req.user.id, schoolId || null, schoolName, district, block, dateTime, answersJson, pdfBase64 || null, overallGrade, gradeScore]
+      [req.user.id, schoolId || null, schoolName, district, block, dateTime, answersJson, pdfBase64 || null, overallGrade, gradeScore, photosJson || null, signatureBase64 || null]
     );
 
     // If this school was assigned to this officer, close the loop —

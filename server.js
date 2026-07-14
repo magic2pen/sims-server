@@ -16,8 +16,9 @@ const reportsRoutes = require('./routes/reports');
 const app = express();
 app.use(cors());
 // Default body size limit is tiny (100kb) — way too small for a PDF report
-// (sent as base64 text) with embedded photos. 25mb gives comfortable room.
-app.use(express.json({ limit: '25mb' }));
+// plus individual photos and a signature, all sent as base64 text. 45mb
+// gives comfortable room for a report with several photos attached.
+app.use(express.json({ limit: '45mb' }));
 
 // Serve the simple test page (public/test.html) so we can try the API
 // in a browser before the real web portal exists.
