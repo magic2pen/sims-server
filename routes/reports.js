@@ -855,4 +855,113 @@ router.get('/quick-deliverables', requireAuth('admin'), async (req, res) => {
   }
 });
 
+// ====================================================================
+// OFFICER ACTIVITY — how actively subordinate officers are inspecting
+// ====================================================================
+// Same visibility rule as everywhere else: an admin sees activity for
+// every officer within their own jurisdiction, regardless of who
+// created that officer's account.
+
+// GET /api/reports/officer-activity — overview, every officer in your
+// jurisdiction with quick stats, sorted busiest-first.
+router.get('/officer-activity', requireAuth('admin'), async (req, res) => {
+  try {
+    const officersResult = await pool.query(
+      'SELECT id, officer_id, name, designation, district, subdivision, block, status FROM officers'
+    );
+    const adminCtx = { admin_level: req.user.adminLevel, district: req.user.district, subdivision: req.user.subdivision, block: req.user.block };
+    const officers = officersResult.rows.filter((o) => isWithinJurisdiction(adminCtx, o));
+
+    const officerIds = officers.map((o) => o.id);
+    const inspectionsResult = officerIds.length > 0
+      ? await pool.query('SELECT officer_id, school_name, uploaded_at FROM inspections WHERE officer_id = ANY($1::int[])', [officerIds])
+      : { rows: [] };
+
+    const now = new Date();
+    const thisMonth = now.getMonth();
+    const thisYear = now.getFullYear();
+
+    const stats = officers.map((o) => {
+      const theirs = inspectionsResult.rows.filter((i) => i.officer_id === o.id);
+      const thisMonthCount = theirs.filter((i) => {
+        const d = new Date(i.uploaded_at);
+        return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+      }).length;
+      const thisYearCount = theirs.filter((i) => new Date(i.uploaded_at).getFullYear() === thisYear).length;
+      const distinctSchools = new Set(theirs.map((i) => i.school_name)).size;
+      const dates = theirs.map((i) => new Date(i.uploaded_at)).sort((a, b) => a - b);
+      const lastVisit = dates.length > 0 ? dates[dates.length - 1] : null;
+      const firstVisit = dates.length > 0 ? dates[0] : null;
+
+      let avgPerMonth = null;
+      if (firstVisit && theirs.length > 0) {
+        const monthsSpan = Math.max(1, (now.getFullYear() - firstVisit.getFullYear()) * 12 + (now.getMonth() - firstVisit.getMonth()) + 1);
+        avgPerMonth = Math.round((theirs.length / monthsSpan) * 10) / 10;
+      }
+
+      return {
+        officerId: o.id, officerCode: o.officer_id, name: o.name, designation: o.designation,
+        district: o.district, block: o.block, status: o.status,
+        totalInspections: theirs.length, thisMonth: thisMonthCount, thisYear: thisYearCount,
+        avgPerMonth, distinctSchools, lastVisit
+      };
+    }).sort((a, b) => b.totalInspections - a.totalInspections);
+
+    res.json({ officers: stats });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error generating officer activity report', detail: err.message });
+  }
+});
+
+// GET /api/reports/officer-activity/:officerId — one officer's full
+// breakdown: monthly and yearly counts, plus every inspection with its
+// school and date.
+router.get('/officer-activity/:officerId', requireAuth('admin'), async (req, res) => {
+  try {
+    const officerResult = await pool.query('SELECT * FROM officers WHERE id = $1', [req.params.officerId]);
+    if (officerResult.rows.length === 0) return res.status(404).json({ error: 'Officer not found' });
+    const officer = officerResult.rows[0];
+
+    const adminCtx = { admin_level: req.user.adminLevel, district: req.user.district, subdivision: req.user.subdivision, block: req.user.block };
+    if (!isWithinJurisdiction(adminCtx, officer)) {
+      return res.status(403).json({ error: 'This officer is outside your jurisdiction.' });
+    }
+
+    const inspectionsResult = await pool.query(
+      'SELECT id, school_id, school_name, district, block, uploaded_at, overall_grade FROM inspections WHERE officer_id = $1 ORDER BY uploaded_at DESC',
+      [req.params.officerId]
+    );
+    const inspections = inspectionsResult.rows;
+
+    const monthlyMap = {};
+    inspections.forEach((i) => {
+      const key = monthKey(i.uploaded_at);
+      monthlyMap[key] = (monthlyMap[key] || 0) + 1;
+    });
+    const monthly = Object.keys(monthlyMap).sort().map((k) => ({ month: k, count: monthlyMap[k] }));
+
+    const yearlyMap = {};
+    inspections.forEach((i) => {
+      const y = new Date(i.uploaded_at).getFullYear();
+      yearlyMap[y] = (yearlyMap[y] || 0) + 1;
+    });
+    const yearly = Object.keys(yearlyMap).sort().map((y) => ({ year: parseInt(y, 10), count: yearlyMap[y] }));
+
+    const distinctSchools = [...new Set(inspections.map((i) => i.school_name))];
+
+    res.json({
+      officerName: officer.name, officerCode: officer.officer_id, designation: officer.designation,
+      district: officer.district, block: officer.block, status: officer.status,
+      totalInspections: inspections.length,
+      distinctSchoolsCount: distinctSchools.length,
+      monthly, yearly,
+      inspections: inspections.map((i) => ({ inspectionId: i.id, schoolName: i.school_name, block: i.block, date: i.uploaded_at, grade: i.overall_grade }))
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error generating officer activity detail', detail: err.message });
+  }
+});
+
 module.exports = router;

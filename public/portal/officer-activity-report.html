@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIMS Portal — Officer Activity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="tripura_emblem.png" alt="" onerror="this.style.display='none'">
+      <div><div class="name">SIMS Portal</div><div class="sub">West Tripura</div></div>
+    </div>
+    <nav>
+      <a href="dashboard.html">Inspections</a>
+      <a href="reports.html" class="admin-only-nav" style="display:none;">Reports</a>
+      <a href="assignments.html" class="admin-only-nav" style="display:none;">Assignments</a>
+      <a href="schools.html" class="admin-only-nav" style="display:none;">Schools</a>
+      <a href="admins.html" class="admin-only-nav" style="display:none;">Admins</a>
+      <a href="officers.html" class="admin-only-nav active" style="display:none;">Officers</a>
+      <a href="profile.html" class="admin-only-nav" style="display:none;">My Profile</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="officer-name" id="sidebarOfficerName">—</div>
+      <div class="officer-role" id="sidebarOfficerRole">—</div>
+      <button id="sidebarLogoutBtn">Sign Out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <a href="officers.html" class="back-link-btn">&larr; Back to Officers</a>
+    <div id="content"><div class="empty-state">Loading...</div></div>
+  </main>
+</div>
+
+<style>
+  .back-link-btn { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; margin-bottom:14px; cursor:pointer; color: var(--gov-blue); background:none; border:none; font-family: inherit; padding:0; text-decoration:none; }
+  .card { background: var(--card); border-radius: 14px; padding: 22px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 20px; }
+  .card h3 { font-size: 15px; margin: 0 0 4px; }
+  .card .note { font-size: 12px; color: var(--text-secondary); margin: 0 0 16px; }
+
+  .officer-row { display: grid; grid-template-columns: 1.6fr 0.8fr 0.8fr 0.8fr 0.9fr 0.9fr 1fr; gap: 10px; padding: 13px 16px; border-bottom: 1px solid var(--border); font-size: 13px; align-items: center; cursor: pointer; }
+  .officer-row:hover { background: #FAFBFF; }
+  .officer-row.header { font-weight: 700; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; background: #FAFBFF; cursor: default; }
+  .officer-row.header:hover { background: #FAFBFF; }
+  .officer-name-cell .desig { font-size: 11px; color: var(--text-secondary); }
+  .status-pill { display:inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+  .status-active { background: var(--gov-green-bg); color: var(--gov-green); }
+  .status-inactive { background: var(--gov-red-bg); color: var(--gov-red); }
+  .big-num { font-family: 'IBM Plex Mono', monospace; font-weight: 700; }
+
+  .hero-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 14px; margin-bottom: 20px; }
+  .hero-stat { background: #FAFBFF; border-radius: 12px; padding: 16px; text-align: center; }
+  .hero-stat .v { font-family: 'IBM Plex Mono', monospace; font-size: 26px; font-weight: 700; color: var(--gov-blue); }
+  .hero-stat .l { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+
+  .visit-row { display: grid; grid-template-columns: 1.6fr 1fr 0.9fr 0.9fr; gap: 10px; padding: 11px 16px; border-bottom: 1px solid var(--border); font-size: 13px; align-items: center; }
+  .visit-row.header { font-weight: 700; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; background: #FAFBFF; }
+  .grade-pill { font-family: 'IBM Plex Mono', monospace; font-weight: 700; padding: 2px 8px; border-radius: 8px; background: #EEF1F6; font-size: 11px; }
+</style>
+
+<script src="portal.js"></script>
+<script>
+  requireAdmin();
+  renderSidebarFooter();
+  if (typeof Chart === 'undefined') {
+    document.getElementById('content').innerHTML = '<div class="empty-state">The charting library did not load. Refresh the page.</div>';
+    throw new Error('Chart.js failed to load');
+  }
+
+  let currentOfficerId = null;
+  let charts = {};
+
+  function formatDateShort(iso) {
+    return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+  function monthLabel(monthKey) {
+    const [y, m] = monthKey.split('-');
+    return new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
+  }
+
+  async function render() {
+    if (currentOfficerId) await renderDetail(currentOfficerId);
+    else await renderOverview();
+  }
+
+  async function renderOverview() {
+    const container = document.getElementById('content');
+    container.innerHTML = '<div class="empty-state">Loading...</div>';
+    try {
+      const data = await apiGet('/api/reports/officer-activity');
+      if (data.officers.length === 0) {
+        container.innerHTML = '<div class="empty-state">No officers in your jurisdiction yet.</div>';
+        return;
+      }
+
+      const header = `<div class="officer-row header"><div>Officer</div><div>Total</div><div>This Month</div><div>This Year</div><div>Avg / Month</div><div>Schools</div><div>Last Visit</div></div>`;
+      const rows = data.officers.map((o) => `
+        <div class="officer-row" onclick="openOfficer(${o.officerId})">
+          <div class="officer-name-cell">
+            <strong>${escapeHtml(o.name)}</strong>
+            <div class="desig">${escapeHtml(o.designation || '')} · ${escapeHtml(o.block || o.district || '')} ${o.status === 'inactive' ? '<span class="status-pill status-inactive">Inactive</span>' : ''}</div>
+          </div>
+          <div class="big-num">${o.totalInspections}</div>
+          <div class="big-num">${o.thisMonth}</div>
+          <div class="big-num">${o.thisYear}</div>
+          <div class="big-num">${o.avgPerMonth !== null ? o.avgPerMonth : '—'}</div>
+          <div class="big-num">${o.distinctSchools}</div>
+          <div style="font-size:12px;color:var(--text-secondary);">${o.lastVisit ? formatDateShort(o.lastVisit) : 'Never'}</div>
+        </div>`).join('');
+
+      container.innerHTML = `
+        <h1 class="page-title">👮 Officer Activity</h1>
+        <p class="page-subtitle">How actively each officer in your jurisdiction is conducting inspections. Click any officer for their full breakdown.</p>
+        <div class="card" style="padding:0; overflow:hidden;">${header}${rows}</div>
+      `;
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state">Couldn't load report: ${err.message}</div>`;
+    }
+  }
+
+  function openOfficer(id) { currentOfficerId = id; render(); }
+  function closeOfficer() { currentOfficerId = null; render(); }
+
+  async function renderDetail(officerId) {
+    const container = document.getElementById('content');
+    container.innerHTML = '<div class="empty-state">Loading...</div>';
+    try {
+      const data = await apiGet(`/api/reports/officer-activity/${officerId}`);
+
+      const avgPerMonth = data.monthly.length > 0 ? Math.round((data.totalInspections / data.monthly.length) * 10) / 10 : 0;
+
+      const heroHtml = `
+        <div class="hero-row">
+          <div class="hero-stat"><div class="v">${data.totalInspections}</div><div class="l">Total Inspections</div></div>
+          <div class="hero-stat"><div class="v">${data.distinctSchoolsCount}</div><div class="l">Distinct Schools</div></div>
+          <div class="hero-stat"><div class="v">${avgPerMonth}</div><div class="l">Avg / Active Month</div></div>
+          <div class="hero-stat"><div class="v">${data.inspections.length > 0 ? formatDateShort(data.inspections[0].date) : '—'}</div><div class="l">Last Visit</div></div>
+        </div>`;
+
+      const yearlyHtml = data.yearly.map((y) => `<span class="status-pill status-active" style="margin-right:8px;font-size:11px;">${y.year}: ${y.count}</span>`).join('');
+
+      const visitRows = data.inspections.map((i) => `
+        <div class="visit-row">
+          <div>${i.inspectionId ? `<a href="inspection.html?id=${i.inspectionId}" style="color:var(--gov-blue);">${escapeHtml(i.schoolName)}</a>` : escapeHtml(i.schoolName)}</div>
+          <div style="font-size:12px;color:var(--text-secondary);">${escapeHtml(i.block || '')}</div>
+          <div style="font-size:12px;">${formatDateShort(i.date)}</div>
+          <div><span class="grade-pill">${escapeHtml(i.grade || '—')}</span></div>
+        </div>`).join('');
+
+      container.innerHTML = `
+        <button class="back-link-btn" onclick="closeOfficer()" style="margin-bottom:14px;">&larr; Back to all officers</button>
+        <h1 class="page-title">${escapeHtml(data.officerName)}</h1>
+        <p class="page-subtitle">${escapeHtml(data.designation || '')} · ${escapeHtml(data.block || '')}, ${escapeHtml(data.district || '')}</p>
+
+        ${heroHtml}
+
+        <div class="card">
+          <h3>Monthly Activity</h3>
+          <p class="note">Number of inspections per month, across all years on record.</p>
+          <canvas id="monthlyChart" style="max-height:240px;"></canvas>
+        </div>
+
+        <div class="card">
+          <h3>By Year</h3>
+          <p class="note">Total inspections per calendar year.</p>
+          <div>${yearlyHtml || '<span style="color:var(--text-secondary);font-size:13px;">No data yet.</span>'}</div>
+        </div>
+
+        <h3 style="font-size:15px;margin:24px 0 12px;">All Inspections — Latest First</h3>
+        <div class="card" style="padding:0; overflow:hidden;">
+          <div class="visit-row header"><div>School</div><div>Block</div><div>Date</div><div>Grade</div></div>
+          ${visitRows || '<div class="empty-state">No inspections yet.</div>'}
+        </div>
+      `;
+
+      if (charts.monthly) charts.monthly.destroy();
+      charts.monthly = new Chart(document.getElementById('monthlyChart'), {
+        type: 'bar',
+        data: { labels: data.monthly.map((m) => monthLabel(m.month)), datasets: [{ label: 'Inspections', data: data.monthly.map((m) => m.count), backgroundColor: '#1E4FA3' }] },
+        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+      });
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state">Couldn't load officer detail: ${err.message}</div>`;
+    }
+  }
+
+  render();
+</script>
+</body>
+</html>
