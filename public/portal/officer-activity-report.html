@@ -12,7 +12,7 @@
 <body>
 
 <div class="shell">
-  <aside class="sidebar">
+  <aside class="sidebar no-print">
     <div class="sidebar-brand">
       <img src="tripura_emblem.png" alt="" onerror="this.style.display='none'">
       <div><div class="name">SIMS Portal</div><div class="sub">West Tripura</div></div>
@@ -34,7 +34,13 @@
   </aside>
 
   <main class="main">
-    <a href="officers.html" class="back-link-btn">&larr; Back to Officers</a>
+    <a href="officers.html" class="back-link-btn no-print">&larr; Back to Officers</a>
+    <div id="printHeader" class="print-header">
+      <h1 id="printTitle">Officer Activity Report</h1>
+      <p>Government of Tripura — District Administration, West Tripura</p>
+      <p id="printDateLine"></p>
+      <hr>
+    </div>
     <div id="content"><div class="empty-state">Loading...</div></div>
   </main>
 </div>
@@ -63,6 +69,32 @@
   .visit-row { display: grid; grid-template-columns: 1.6fr 1fr 0.9fr 0.9fr; gap: 10px; padding: 11px 16px; border-bottom: 1px solid var(--border); font-size: 13px; align-items: center; }
   .visit-row.header { font-weight: 700; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; background: #FAFBFF; }
   .grade-pill { font-family: 'IBM Plex Mono', monospace; font-weight: 700; padding: 2px 8px; border-radius: 8px; background: #EEF1F6; font-size: 11px; }
+
+  .tab-row { display: flex; gap: 10px; margin-bottom: 16px; }
+  .tab-btn { padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border); background: white; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-secondary); }
+  .tab-btn.active { background: var(--gov-blue); color: white; border-color: var(--gov-blue); }
+  .toolbar-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+
+  .compliance-row { display: grid; grid-template-columns: 1.6fr 0.8fr 0.8fr 0.9fr 0.9fr 0.7fr 1fr; gap: 10px; padding: 13px 16px; border-bottom: 1px solid var(--border); font-size: 13px; align-items: center; }
+  .compliance-row.header { font-weight: 700; color: var(--text-secondary); font-size: 10px; text-transform: uppercase; background: #FAFBFF; }
+  .compliance-pct { font-family: 'IBM Plex Mono', monospace; font-weight: 700; padding: 3px 10px; border-radius: 20px; display: inline-block; }
+  .compliance-good { background: var(--gov-green-bg); color: var(--gov-green); }
+  .compliance-mid { background: var(--gov-amber-bg); color: var(--gov-amber); }
+  .compliance-bad { background: var(--gov-red-bg); color: var(--gov-red); }
+
+  .print-header { display: none; }
+
+  @media print {
+    .no-print { display: none !important; }
+    .sidebar { display: none !important; }
+    .shell { display: block !important; }
+    .main { padding: 0 !important; margin: 0 !important; width: 100% !important; }
+    .print-header { display: block !important; margin-bottom: 20px; }
+    .print-header h1 { font-size: 20px; margin: 0 0 4px; }
+    .print-header p { font-size: 12px; margin: 2px 0; color: #444; }
+    .print-header hr { margin-top: 10px; border: none; border-top: 2px solid #1E4FA3; }
+    .card { box-shadow: none !important; border: 1px solid #ccc; }
+  }
 </style>
 
 <script src="portal.js"></script>
@@ -75,6 +107,8 @@
   }
 
   let currentOfficerId = null;
+  let currentTab = 'activity'; // 'activity' | 'compliance'
+  let lastData = null;
   let charts = {};
 
   function formatDateShort(iso) {
@@ -84,42 +118,87 @@
     const [y, m] = monthKey.split('-');
     return new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
   }
+  function pctClass(pct) {
+    if (pct === null || pct === undefined) return 'compliance-mid';
+    if (pct >= 80) return 'compliance-good';
+    if (pct >= 50) return 'compliance-mid';
+    return 'compliance-bad';
+  }
 
   async function render() {
     if (currentOfficerId) await renderDetail(currentOfficerId);
     else await renderOverview();
   }
 
+  function switchTab(tab) {
+    currentTab = tab;
+    renderOverview();
+  }
+
+  function printReport() {
+    document.getElementById('printTitle').textContent = currentTab === 'compliance' ? 'Assignment Compliance Report' : 'Officer Activity Report';
+    document.getElementById('printDateLine').textContent = `Generated: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}`;
+    window.print();
+  }
+
   async function renderOverview() {
     const container = document.getElementById('content');
     container.innerHTML = '<div class="empty-state">Loading...</div>';
     try {
-      const data = await apiGet('/api/reports/officer-activity');
+      const data = lastData || await apiGet('/api/reports/officer-activity');
+      lastData = data;
       if (data.officers.length === 0) {
         container.innerHTML = '<div class="empty-state">No officers in your jurisdiction yet.</div>';
         return;
       }
 
-      const header = `<div class="officer-row header"><div>Officer</div><div>Total</div><div>This Month</div><div>This Year</div><div>Avg / Month</div><div>Schools</div><div>Last Visit</div></div>`;
-      const rows = data.officers.map((o) => `
-        <div class="officer-row" onclick="openOfficer(${o.officerId})">
-          <div class="officer-name-cell">
-            <strong>${escapeHtml(o.name)}</strong>
-            <div class="desig">${escapeHtml(o.designation || '')} · ${escapeHtml(o.block || o.district || '')} ${o.status === 'inactive' ? '<span class="status-pill status-inactive">Inactive</span>' : ''}</div>
+      const tabsHtml = `
+        <div class="toolbar-row no-print">
+          <div class="tab-row">
+            <button class="tab-btn ${currentTab === 'activity' ? 'active' : ''}" onclick="switchTab('activity')">By Activity</button>
+            <button class="tab-btn ${currentTab === 'compliance' ? 'active' : ''}" onclick="switchTab('compliance')">By Assignment Compliance</button>
           </div>
-          <div class="big-num">${o.totalInspections}</div>
-          <div class="big-num">${o.thisMonth}</div>
-          <div class="big-num">${o.thisYear}</div>
-          <div class="big-num">${o.avgPerMonth !== null ? o.avgPerMonth : '—'}</div>
-          <div class="big-num">${o.distinctSchools}</div>
-          <div style="font-size:12px;color:var(--text-secondary);">${o.lastVisit ? formatDateShort(o.lastVisit) : 'Never'}</div>
-        </div>`).join('');
+          <button class="btn btn-outline" onclick="printReport()">🖨️ Print This Report</button>
+        </div>`;
 
-      container.innerHTML = `
-        <h1 class="page-title">👮 Officer Activity</h1>
-        <p class="page-subtitle">How actively each officer in your jurisdiction is conducting inspections. Click any officer for their full breakdown.</p>
-        <div class="card" style="padding:0; overflow:hidden;">${header}${rows}</div>
-      `;
+      let tableHtml;
+      if (currentTab === 'compliance') {
+        const sorted = [...data.officers].sort((a, b) => (b.visitedPercent ?? -1) - (a.visitedPercent ?? -1));
+        const header = `<div class="compliance-row header"><div>Officer</div><div>Assigned</div><div>Visited</div><div>% Visited</div><div>On-Time</div><div>Late</div><div>Still Pending</div></div>`;
+        const rows = sorted.map((o) => `
+          <div class="compliance-row">
+            <div><strong>${escapeHtml(o.name)}</strong><div style="font-size:11px;color:var(--text-secondary);">${escapeHtml(o.designation || '')} · ${escapeHtml(o.block || o.district || '')}</div></div>
+            <div class="big-num">${o.assignedTotal}</div>
+            <div class="big-num">${o.visitedCount}</div>
+            <div>${o.assignedTotal > 0 ? `<span class="compliance-pct ${pctClass(o.visitedPercent)}">${o.visitedPercent}%</span>` : '<span style="color:var(--text-secondary);font-size:12px;">No assignments</span>'}</div>
+            <div class="big-num" style="color:var(--gov-green);">${o.onTimeCount}</div>
+            <div class="big-num" style="color:${o.lateCount > 0 ? 'var(--gov-red)' : 'inherit'};">${o.lateCount}</div>
+            <div class="big-num" style="color:${o.stillPendingCount > 0 ? 'var(--gov-amber)' : 'inherit'};">${o.stillPendingCount}</div>
+          </div>`).join('');
+        tableHtml = `
+          <p class="page-subtitle no-print">Of the schools formally ASSIGNED to each officer (not counting schools they inspected on their own initiative), how many were actually visited, and whether on time. Sorted best to worst.</p>
+          <div class="card" style="padding:0; overflow:hidden;">${header}${rows}</div>`;
+      } else {
+        const header = `<div class="officer-row header"><div>Officer</div><div>Total</div><div>This Month</div><div>This Year</div><div>Avg / Month</div><div>Schools</div><div>Last Visit</div></div>`;
+        const rows = data.officers.map((o) => `
+          <div class="officer-row" onclick="openOfficer(${o.officerId})">
+            <div class="officer-name-cell">
+              <strong>${escapeHtml(o.name)}</strong>
+              <div class="desig">${escapeHtml(o.designation || '')} · ${escapeHtml(o.block || o.district || '')} ${o.status === 'inactive' ? '<span class="status-pill status-inactive">Inactive</span>' : ''}</div>
+            </div>
+            <div class="big-num">${o.totalInspections}</div>
+            <div class="big-num">${o.thisMonth}</div>
+            <div class="big-num">${o.thisYear}</div>
+            <div class="big-num">${o.avgPerMonth !== null ? o.avgPerMonth : '—'}</div>
+            <div class="big-num">${o.distinctSchools}</div>
+            <div style="font-size:12px;color:var(--text-secondary);">${o.lastVisit ? formatDateShort(o.lastVisit) : 'Never'}</div>
+          </div>`).join('');
+        tableHtml = `
+          <p class="page-subtitle no-print">How actively each officer in your jurisdiction is conducting inspections. Click any officer for their full breakdown.</p>
+          <div class="card" style="padding:0; overflow:hidden;">${header}${rows}</div>`;
+      }
+
+      container.innerHTML = `<h1 class="page-title no-print">👮 Officer Activity</h1>${tabsHtml}${tableHtml}`;
     } catch (err) {
       container.innerHTML = `<div class="empty-state">Couldn't load report: ${err.message}</div>`;
     }
@@ -155,7 +234,7 @@
         </div>`).join('');
 
       container.innerHTML = `
-        <button class="back-link-btn" onclick="closeOfficer()" style="margin-bottom:14px;">&larr; Back to all officers</button>
+        <button class="back-link-btn no-print" onclick="closeOfficer()" style="margin-bottom:14px;">&larr; Back to all officers</button>
         <h1 class="page-title">${escapeHtml(data.officerName)}</h1>
         <p class="page-subtitle">${escapeHtml(data.designation || '')} · ${escapeHtml(data.block || '')}, ${escapeHtml(data.district || '')}</p>
 

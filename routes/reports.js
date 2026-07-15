@@ -876,6 +876,9 @@ router.get('/officer-activity', requireAuth('admin'), async (req, res) => {
     const inspectionsResult = officerIds.length > 0
       ? await pool.query('SELECT officer_id, school_name, uploaded_at FROM inspections WHERE officer_id = ANY($1::int[])', [officerIds])
       : { rows: [] };
+    const assignmentsResult = officerIds.length > 0
+      ? await pool.query('SELECT officer_id, school_name, due_date, status, completed_at FROM assignments a JOIN schools s ON a.school_id = s.id WHERE officer_id = ANY($1::int[])', [officerIds])
+      : { rows: [] };
 
     const now = new Date();
     const thisMonth = now.getMonth();
@@ -899,11 +902,25 @@ router.get('/officer-activity', requireAuth('admin'), async (req, res) => {
         avgPerMonth = Math.round((theirs.length / monthsSpan) * 10) / 10;
       }
 
+      // Assignment compliance — of the schools actually ASSIGNED to this
+      // officer (as opposed to schools they inspected on their own
+      // initiative), how many were actually visited, and how many of
+      // those were visited on or before the due date.
+      const theirAssignments = assignmentsResult.rows.filter((a) => a.officer_id === o.id);
+      const assignedTotal = theirAssignments.length;
+      const visited = theirAssignments.filter((a) => a.status === 'completed');
+      const visitedCount = visited.length;
+      const visitedPercent = assignedTotal > 0 ? Math.round((visitedCount / assignedTotal) * 100) : null;
+      const onTimeCount = visited.filter((a) => !a.due_date || !a.completed_at || new Date(a.completed_at) <= new Date(a.due_date)).length;
+      const lateCount = visitedCount - onTimeCount;
+      const stillPendingCount = assignedTotal - visitedCount;
+
       return {
         officerId: o.id, officerCode: o.officer_id, name: o.name, designation: o.designation,
         district: o.district, block: o.block, status: o.status,
         totalInspections: theirs.length, thisMonth: thisMonthCount, thisYear: thisYearCount,
-        avgPerMonth, distinctSchools, lastVisit
+        avgPerMonth, distinctSchools, lastVisit,
+        assignedTotal, visitedCount, visitedPercent, onTimeCount, lateCount, stillPendingCount
       };
     }).sort((a, b) => b.totalInspections - a.totalInspections);
 

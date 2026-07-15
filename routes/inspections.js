@@ -55,10 +55,12 @@ router.post('/', requireAuth('officer'), async (req, res) => {
     );
 
     // If this school was assigned to this officer, close the loop —
-    // the assignment is now fulfilled, no manual step needed.
+    // the assignment is now fulfilled, no manual step needed. Recording
+    // completed_at (not just the status) is what lets reporting later
+    // tell on-time completion apart from late.
     if (schoolId) {
       await pool.query(
-        `UPDATE assignments SET status = 'completed'
+        `UPDATE assignments SET status = 'completed', completed_at = NOW()
          WHERE officer_id = $1 AND school_id = $2 AND status = 'pending'`,
         [req.user.id, schoolId]
       );
