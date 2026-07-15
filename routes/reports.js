@@ -877,7 +877,7 @@ router.get('/officer-activity', requireAuth('admin'), async (req, res) => {
       ? await pool.query('SELECT officer_id, school_name, uploaded_at FROM inspections WHERE officer_id = ANY($1::int[])', [officerIds])
       : { rows: [] };
     const assignmentsResult = officerIds.length > 0
-      ? await pool.query('SELECT officer_id, school_name, due_date, status, completed_at FROM assignments a JOIN schools s ON a.school_id = s.id WHERE officer_id = ANY($1::int[])', [officerIds])
+      ? await pool.query('SELECT officer_id, due_date, status, completed_at FROM assignments WHERE officer_id = ANY($1::int[])', [officerIds])
       : { rows: [] };
 
     const now = new Date();
