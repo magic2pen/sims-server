@@ -279,6 +279,36 @@
       </div>`;
   }
 
+  function renderLocationWeather(answers) {
+    const lat = parseFloat(answers['meta_gps_lat'] && answers['meta_gps_lat'].value);
+    const lng = parseFloat(answers['meta_gps_lng'] && answers['meta_gps_lng'].value);
+    const weather = answers['meta_weather'] && answers['meta_weather'].value;
+    const hasLocation = !isNaN(lat) && !isNaN(lng);
+    const hasWeather = weather && weather.trim().length > 0;
+    if (!hasLocation && !hasWeather) return '';
+
+    let mapHtml = '';
+    if (hasLocation) {
+      const d = 0.004; // small bounding box around the point, for a close-in view
+      const bbox = `${lng - d},${lat - d},${lng + d},${lat + d}`;
+      const embedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
+      const externalUrl = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=17/${lat}/${lng}`;
+      mapHtml = `
+        <iframe src="${embedUrl}" style="width:100%; height:280px; border:1px solid var(--border); border-radius:10px;" loading="lazy"></iframe>
+        <p style="font-size:12px; margin-top:8px;"><a href="${externalUrl}" target="_blank" rel="noopener" style="color:var(--gov-blue);">Open in OpenStreetMap &rarr;</a></p>`;
+    }
+
+    return `
+      <div class="card">
+        <div class="sec-header"><span class="icon">📍</span><h3>Location &amp; Weather</h3></div>
+        <div class="sec-body">
+          ${hasLocation ? `<div class="q-row"><div>GPS Coordinates</div><div class="data">${lat.toFixed(6)}, ${lng.toFixed(6)}</div></div>` : ''}
+          ${hasWeather ? `<div class="q-row"><div>Weather at Time of Inspection</div><div>${escapeHtml(weather)}</div></div>` : ''}
+          ${mapHtml ? `<div style="margin-top:12px;">${mapHtml}</div>` : (hasLocation ? '' : '<p style="font-size:13px;color:var(--text-secondary);">No GPS location recorded for this inspection.</p>')}
+        </div>
+      </div>`;
+  }
+
   function renderPhotos(photosJson, signatureBase64) {
     let photos = {};
     try { photos = JSON.parse(photosJson || '{}'); } catch (e) { photos = {}; }
@@ -397,6 +427,8 @@
           ${pdfSection}
         </div>
       `;
+
+      html += renderLocationWeather(answers);
 
       QUESTIONNAIRE_SECTIONS.forEach((section) => {
         if (section.special === 'STUDENT_ATTENDANCE') html += renderStudentAttendance(answers);
