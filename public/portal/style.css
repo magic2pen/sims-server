@@ -68,11 +68,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   padding: 0 20px 24px;
   border-bottom: 1px solid rgba(255,255,255,0.15);
   margin-bottom: 16px;
+  position: relative;
 }
 
 .sidebar-brand img { width: 34px; height: 34px; }
 .sidebar-brand .name { font-weight: 600; font-size: 15px; line-height: 1.2; }
 .sidebar-brand .sub { font-size: 11px; opacity: 0.7; }
+.home-btn {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  text-decoration: none;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+}
+.home-btn:hover { opacity: 1; }
 
 .sidebar nav { display: flex; flex-direction: column; gap: 2px; padding: 0 12px; }
 

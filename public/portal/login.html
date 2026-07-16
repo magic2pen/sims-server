@@ -154,7 +154,7 @@
       localStorage.setItem('sims_token', data.token);
       localStorage.setItem('sims_role', 'admin');
       localStorage.setItem('sims_profile', JSON.stringify(data.admin));
-      window.location.href = 'dashboard.html';
+      window.location.href = 'home.html';
     } catch (err) {
       errorBox.textContent = err.message || 'Couldn\'t reach the server.';
       errorBox.style.display = 'block';
@@ -163,7 +163,7 @@
     }
   });
 
-  if (getToken()) window.location.href = 'dashboard.html';
+  if (getToken()) window.location.href = (getRole() === 'admin') ? 'home.html' : 'dashboard.html';
 </script>
 </body>
 </html>
