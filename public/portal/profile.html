@@ -20,9 +20,9 @@
       <a href="dashboard.html">Inspections</a>
       <a href="reports.html" class="admin-only-nav" style="display:none;">Reports</a>
       <a href="assignments.html" class="admin-only-nav" style="display:none;">Assignments</a>
-      <a href="schools.html" class="admin-only-nav" style="display:none;">Schools</a>
       <a href="admins.html" class="admin-only-nav" style="display:none;">Admins</a>
       <a href="officers.html" class="admin-only-nav" style="display:none;">Officers</a>
+      <a href="questionnaire.html" class="dm-only-nav" style="display:none;">Questionnaire</a>
       <a href="profile.html" class="admin-only-nav active" style="display:none;">My Profile</a>
     </nav>
     <div class="sidebar-footer">
@@ -58,15 +58,15 @@
         </div>
         <div class="field">
           <label>District</label>
-          <select id="fDistrict"></select>
+          <input id="fDistrict" placeholder="e.g. West Tripura">
         </div>
         <div class="field">
           <label>Subdivision (only if you're SDM-level)</label>
-          <select id="fSubdivision"></select>
+          <input id="fSubdivision" placeholder="Leave blank if District-level">
         </div>
         <div class="field">
-          <label>Block / Nagar Panchayat / Municipality (only if you're BDO-level)</label>
-          <select id="fBlock"></select>
+          <label>Block (only if you're BDO-level)</label>
+          <input id="fBlock" placeholder="Leave blank if District/Subdivision-level">
         </div>
         <button type="submit" class="btn btn-primary" id="saveBtn">Save Changes</button>
       </form>
@@ -86,7 +86,6 @@
 </style>
 
 <script src="portal.js"></script>
-<script src="jurisdictionData.js"></script>
 <script>
   requireAdmin();
   renderSidebarFooter();
@@ -97,12 +96,9 @@
     document.getElementById('fName').value = profile.name || '';
     document.getElementById('fEmail').value = profile.email || '';
     document.getElementById('fDesignation').value = profile.designation || '';
-    populateSelect(document.getElementById('fDistrict'), DISTRICTS, profile.district, 'Not applicable / Select District');
-    populateSelect(document.getElementById('fSubdivision'), SUBDIVISIONS, profile.subdivision, 'Not applicable / Select Subdivision');
-    populateBlockSelect(document.getElementById('fBlock'), profile.subdivision, profile.block, 'Not applicable / Select Block / Nagar Panchayat / Municipality');
-    document.getElementById('fSubdivision').addEventListener('change', (e) => {
-      populateBlockSelect(document.getElementById('fBlock'), e.target.value, null, 'Not applicable / Select Block / Nagar Panchayat / Municipality');
-    });
+    document.getElementById('fDistrict').value = profile.district || '';
+    document.getElementById('fSubdivision').value = profile.subdivision || '';
+    document.getElementById('fBlock').value = profile.block || '';
   }
 
   document.getElementById('profileForm').addEventListener('submit', async (e) => {

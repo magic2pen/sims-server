@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIMS Portal — Questionnaire</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="tripura_emblem.png" alt="" onerror="this.style.display='none'">
+      <div><div class="name">SIMS Portal</div><div class="sub">West Tripura</div></div>
+    </div>
+    <nav>
+      <a href="dashboard.html">Inspections</a>
+      <a href="reports.html" class="admin-only-nav" style="display:none;">Reports</a>
+      <a href="assignments.html" class="admin-only-nav" style="display:none;">Assignments</a>
+      <a href="schools.html" class="admin-only-nav" style="display:none;">Schools</a>
+      <a href="admins.html" class="admin-only-nav" style="display:none;">Admins</a>
+      <a href="officers.html" class="admin-only-nav" style="display:none;">Officers</a>
+      <a href="questionnaire.html" class="dm-only-nav active" style="display:none;">Questionnaire</a>
+      <a href="profile.html" class="admin-only-nav" style="display:none;">My Profile</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="officer-name" id="sidebarOfficerName">—</div>
+      <div class="officer-role" id="sidebarOfficerRole">—</div>
+      <button id="sidebarLogoutBtn">Sign Out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div id="content"><div class="empty-state">Loading...</div></div>
+  </main>
+</div>
+
+<style>
+  .back-link-btn { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; margin-bottom:14px; cursor:pointer; color: var(--gov-blue); background:none; border:none; font-family: inherit; padding:0; text-decoration:none; }
+  .banner { background: #FFF7E0; border: 1px solid #E6C260; border-radius: 10px; padding: 14px 16px; font-size: 13px; color: #7A5A00; margin-bottom: 20px; }
+  .scheme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .scheme-card { background: var(--card); border-radius: 14px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); cursor: pointer; }
+  .scheme-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .scheme-card .name { font-weight: 700; font-size: 15px; }
+  .scheme-card .code { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+  .scheme-card .meta { font-size: 12px; color: var(--text-secondary); margin-top: 10px; }
+  .status-pill { display:inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; margin-left: 6px; }
+  .status-active { background: var(--gov-green-bg); color: var(--gov-green); }
+  .status-inactive { background: var(--gov-red-bg); color: var(--gov-red); }
+
+  .section-card { background: var(--card); border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 14px; overflow: hidden; }
+  .section-card-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; cursor: pointer; }
+  .section-card-head .title { font-weight: 700; font-size: 14px; }
+  .section-card-head .badge { font-size: 10px; font-weight: 700; background: #EEF1F6; padding: 2px 8px; border-radius: 8px; margin-left: 8px; color: var(--gov-blue); }
+  .section-card-body { padding: 0 18px 16px; display: none; }
+  .section-card-body.open { display: block; }
+
+  .question-row { padding: 10px 0; border-bottom: 1px solid #F0F2F6; font-size: 13px; }
+  .question-row:last-child { border-bottom: none; }
+  .question-row .qlabel { font-weight: 600; }
+  .question-row .qtype { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--text-secondary); margin-left: 6px; }
+  .question-row .qoptions { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+  .question-actions { display: flex; gap: 10px; margin-top: 6px; }
+  .question-actions button { font-size: 11px; border: none; background: none; color: var(--gov-blue); cursor: pointer; padding: 0; }
+  .question-actions button.danger { color: var(--gov-red); }
+  .reveal-block { margin-left: 20px; margin-top: 8px; padding-left: 12px; border-left: 2px solid #EEF1F6; }
+  .reveal-tag { font-size: 10px; font-weight: 700; color: var(--gov-green); text-transform: uppercase; }
+
+  .btn-row { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+  .inline-form { background: #FAFBFF; border-radius: 10px; padding: 14px; margin-top: 10px; }
+  .inline-form .field { margin-bottom: 10px; }
+  .inline-form label { display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
+  .inline-form input, .inline-form select, .inline-form textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; }
+  .inline-form textarea { min-height: 50px; }
+</style>
+
+<script src="portal.js"></script>
+<script>
+  requireLogin();
+  renderSidebarFooter();
+  if (!isDM()) {
+    document.getElementById('content').innerHTML = '<div class="empty-state">This section is only available to the DM.</div>';
+    throw new Error('Not authorized');
+  }
+
+  let currentSchemeId = null;
+  let openSections = new Set();
+
+  async function render() {
+    if (currentSchemeId) await renderSchemeDetail(currentSchemeId);
+    else await renderSchemeList();
+  }
+
+  async function renderSchemeList() {
+    const container = document.getElementById('content');
+    container.innerHTML = '<div class="empty-state">Loading...</div>';
+    try {
+      const data = await apiGet('/api/questionnaire/schemes');
+      const hasSchool = data.schemes.some((s) => s.code === 'school');
+
+      let html = `
+        <h1 class="page-title">📝 Questionnaire</h1>
+        <p class="page-subtitle">Manage inspection types, sections, and questions. This is the structure the app will eventually read directly — for now, editing here does not change what officers see in the field yet.</p>
+        <div class="banner">This is Phase 1 of making SIMS support multiple inspection types (School, AWC, Health Sub Centre, etc.). Changes made here are saved and ready, but the Android app still uses its own built-in questionnaire until Phase 2 is built.</div>
+      `;
+
+      if (!hasSchool) {
+        html += `<div class="btn-row"><button class="btn btn-primary" onclick="seedSchoolScheme()">Seed "School Inspection" from the current app structure</button></div><br>`;
+      }
+
+      html += `<div class="btn-row"><button class="btn btn-outline" onclick="toggleNewSchemeForm()">+ New Scheme</button></div><div id="newSchemeForm"></div>`;
+
+      html += `<div class="scheme-grid">`;
+      data.schemes.forEach((s) => {
+        html += `
+          <div class="scheme-card" onclick="openScheme(${s.id})">
+            <div class="name">${escapeHtml(s.name)}<span class="status-pill ${s.status === 'active' ? 'status-active' : 'status-inactive'}">${s.status}</span></div>
+            <div class="code">${escapeHtml(s.code)}</div>
+            <div class="meta">${escapeHtml(s.description || 'No description')}</div>
+          </div>`;
+      });
+      html += `</div>`;
+
+      if (data.schemes.length === 0) {
+        html += '<div class="empty-state">No schemes yet. Seed the School Inspection scheme above, or create a new one.</div>';
+      }
+
+      container.innerHTML = html;
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state">Couldn't load schemes: ${err.message}</div>`;
+    }
+  }
+
+  async function seedSchoolScheme() {
+    try {
+      const result = await apiPost('/api/questionnaire/seed-school-scheme', {});
+      alert(result.message || 'Done.');
+      render();
+    } catch (err) {
+      alert('Couldn\'t seed the scheme: ' + err.message);
+    }
+  }
+
+  function toggleNewSchemeForm() {
+    const el = document.getElementById('newSchemeForm');
+    if (el.innerHTML) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+      <div class="inline-form" style="max-width:420px;">
+        <div class="field"><label>Name</label><input id="nsName" placeholder="e.g. AWC Inspection"></div>
+        <div class="field"><label>Code (short, no spaces)</label><input id="nsCode" placeholder="e.g. awc"></div>
+        <div class="field"><label>Description</label><textarea id="nsDesc" placeholder="What this inspection type covers"></textarea></div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="createScheme()">Create Scheme</button>
+          <button class="btn btn-outline" onclick="toggleNewSchemeForm()">Cancel</button>
+        </div>
+      </div>`;
+  }
+
+  async function createScheme() {
+    const name = document.getElementById('nsName').value.trim();
+    const code = document.getElementById('nsCode').value.trim();
+    const description = document.getElementById('nsDesc').value.trim();
+    if (!name || !code) { alert('Name and code are required.'); return; }
+    try {
+      await apiPost('/api/questionnaire/schemes', { name, code, description });
+      render();
+    } catch (err) {
+      alert('Couldn\'t create scheme: ' + err.message);
+    }
+  }
+
+  function openScheme(id) {
+    currentSchemeId = id;
+    openSections = new Set();
+    render();
+  }
+  function closeScheme() {
+    currentSchemeId = null;
+    render();
+  }
+
+  function typeBadgeLabel(type) {
+    const map = { YES_NO: 'Yes/No', TEXT: 'Text', MULTILINE_TEXT: 'Long Text', NUMBER: 'Number', DROPDOWN: 'Dropdown', CHOICE: 'Choice', RATIO_PAIR: 'Ratio Pair' };
+    return map[type] || type;
+  }
+
+  function renderQuestion(q, depth) {
+    let html = `<div class="question-row" style="${depth > 0 ? 'margin-left:0;' : ''}">`;
+    html += `<div class="qlabel">${escapeHtml(q.label)}<span class="qtype">${typeBadgeLabel(q.type)}</span></div>`;
+    if (q.options && q.options.length > 0) {
+      html += `<div class="qoptions">Options: ${q.options.map(escapeHtml).join(', ')}</div>`;
+    }
+    if (q.sub_label_1 || q.sub_label_2) {
+      html += `<div class="qoptions">${escapeHtml(q.sub_label_1 || '')} / ${escapeHtml(q.sub_label_2 || '')}</div>`;
+    }
+    html += `<div class="question-actions">
+      <button onclick="deleteQuestion(${q.id})" class="danger">Delete</button>
+      ${q.type === 'YES_NO' ? `<button onclick="showAddQuestionForm(${q.section_id}, ${q.id}, 'ON_YES')">+ Follow-up on Yes</button><button onclick="showAddQuestionForm(${q.section_id}, ${q.id}, 'ON_NO')">+ Follow-up on No</button>` : ''}
+    </div>`;
+
+    ['revealsOnYes', 'revealsOnNo'].forEach((key) => {
+      if (q[key] && q[key].length > 0) {
+        html += `<div class="reveal-block"><div class="reveal-tag">${key === 'revealsOnYes' ? 'If Yes' : 'If No'}</div>`;
+        q[key].forEach((child) => { html += renderQuestion(child, depth + 1); });
+        html += `</div>`;
+      }
+    });
+    if (q.extraTextField) {
+      html += `<div class="reveal-block"><div class="reveal-tag">Always shown below</div>${renderQuestion(q.extraTextField, depth + 1)}</div>`;
+    }
+    html += `</div>`;
+    return html;
+  }
+
+  async function renderSchemeDetail(schemeId) {
+    const container = document.getElementById('content');
+    container.innerHTML = '<div class="empty-state">Loading...</div>';
+    try {
+      const data = await apiGet(`/api/questionnaire/schemes/${schemeId}/full`);
+      let html = `
+        <button class="back-link-btn" onclick="closeScheme()">&larr; Back to Schemes</button>
+        <h1 class="page-title">${escapeHtml(data.scheme.name)}</h1>
+        <p class="page-subtitle">${escapeHtml(data.scheme.description || '')}</p>
+      `;
+
+      data.sections.forEach((section) => {
+        const isOpen = openSections.has(section.id);
+        html += `
+          <div class="section-card">
+            <div class="section-card-head" onclick="toggleSection(${section.id})">
+              <div><span>${section.icon || ''}</span> <span class="title">${escapeHtml(section.title)}</span>${section.special_type ? `<span class="badge">${section.special_type}</span>` : ''}<span class="badge">${section.questions.length} question(s)</span></div>
+              <div>${isOpen ? '▲' : '▼'}</div>
+            </div>
+            <div class="section-card-body ${isOpen ? 'open' : ''}" id="sectionBody-${section.id}">
+              ${section.questions.length === 0 ? '<p style="font-size:13px;color:var(--text-secondary);">No questions in this section' + (section.special_type ? ' — this is a special section rendered by the app directly.' : '.') + '</p>' : ''}
+              ${section.questions.map((q) => renderQuestion(q, 0)).join('')}
+              <div class="btn-row">
+                <button class="btn btn-outline" onclick="showAddQuestionForm(${section.id}, null, null)">+ Add Question</button>
+                <button class="btn btn-outline" onclick="deleteSection(${section.id})" style="color:var(--gov-red);border-color:var(--gov-red);">Delete Section</button>
+              </div>
+              <div id="addQForm-${section.id}"></div>
+            </div>
+          </div>`;
+      });
+
+      html += `<div class="btn-row"><button class="btn btn-primary" onclick="toggleNewSectionForm()">+ Add Section</button></div><div id="newSectionForm"></div>`;
+
+      container.innerHTML = html;
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state">Couldn't load scheme: ${err.message}</div>`;
+    }
+  }
+
+  function toggleSection(id) {
+    if (openSections.has(id)) openSections.delete(id);
+    else openSections.add(id);
+    renderSchemeDetail(currentSchemeId);
+  }
+
+  function toggleNewSectionForm() {
+    const el = document.getElementById('newSectionForm');
+    if (el.innerHTML) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+      <div class="inline-form" style="max-width:420px;">
+        <div class="field"><label>Section Key (stable id, no spaces)</label><input id="secKey" placeholder="e.g. new_facilities"></div>
+        <div class="field"><label>Title</label><input id="secTitle" placeholder="e.g. New Facilities"></div>
+        <div class="field"><label>Icon (emoji, optional)</label><input id="secIcon" placeholder="e.g. 🏗️"></div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="createSection()">Add Section</button>
+          <button class="btn btn-outline" onclick="toggleNewSectionForm()">Cancel</button>
+        </div>
+      </div>`;
+  }
+
+  async function createSection() {
+    const sectionKey = document.getElementById('secKey').value.trim();
+    const title = document.getElementById('secTitle').value.trim();
+    const icon = document.getElementById('secIcon').value.trim();
+    if (!sectionKey || !title) { alert('Section key and title are required.'); return; }
+    try {
+      await apiPost(`/api/questionnaire/schemes/${currentSchemeId}/sections`, { sectionKey, title, icon });
+      renderSchemeDetail(currentSchemeId);
+    } catch (err) {
+      alert('Couldn\'t add section: ' + err.message);
+    }
+  }
+
+  async function deleteSection(id) {
+    if (!confirm('Delete this section and all its questions? This cannot be undone.')) return;
+    try {
+      await apiDelete(`/api/questionnaire/sections/${id}`);
+      renderSchemeDetail(currentSchemeId);
+    } catch (err) {
+      alert('Couldn\'t delete section: ' + err.message);
+    }
+  }
+
+  function showAddQuestionForm(sectionId, parentQuestionId, revealCondition) {
+    const targetId = `addQForm-${sectionId}`;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    if (el.innerHTML) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+      <div class="inline-form">
+        ${parentQuestionId ? `<p style="font-size:12px;color:var(--gov-green);font-weight:700;">Adding a follow-up question (shows ${revealCondition === 'ON_YES' ? 'when the answer is Yes' : 'when the answer is No'})</p>` : ''}
+        <div class="field"><label>Question Key (stable id, no spaces)</label><input id="qKey-${sectionId}" placeholder="e.g. new_question_id"></div>
+        <div class="field"><label>Question Label</label><input id="qLabel-${sectionId}" placeholder="e.g. Is X Available?"></div>
+        <div class="field"><label>Type</label>
+          <select id="qType-${sectionId}" onchange="onQTypeChange(${sectionId})">
+            <option value="YES_NO">Yes/No</option>
+            <option value="TEXT">Short Text</option>
+            <option value="MULTILINE_TEXT">Long Text</option>
+            <option value="NUMBER">Number</option>
+            <option value="DROPDOWN">Dropdown</option>
+            <option value="CHOICE">Choice (buttons)</option>
+            <option value="RATIO_PAIR">Ratio Pair (two numbers)</option>
+          </select>
+        </div>
+        <div class="field" id="qOptionsField-${sectionId}" style="display:none;"><label>Options (comma-separated)</label><input id="qOptions-${sectionId}" placeholder="e.g. Good, Average, Poor"></div>
+        <div class="field" id="qSubLabelsField-${sectionId}" style="display:none;">
+          <label>Sub-label 1 (e.g. "No. of Fan Points")</label><input id="qSub1-${sectionId}">
+          <label style="margin-top:8px;">Sub-label 2 (e.g. "No. Working")</label><input id="qSub2-${sectionId}">
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="createQuestion(${sectionId}, ${parentQuestionId || 'null'}, ${revealCondition ? `'${revealCondition}'` : 'null'})">Add Question</button>
+          <button class="btn btn-outline" onclick="showAddQuestionForm(${sectionId}, null, null)">Cancel</button>
+        </div>
+      </div>`;
+  }
+
+  function onQTypeChange(sectionId) {
+    const type = document.getElementById(`qType-${sectionId}`).value;
+    document.getElementById(`qOptionsField-${sectionId}`).style.display = (type === 'DROPDOWN' || type === 'CHOICE') ? 'block' : 'none';
+    document.getElementById(`qSubLabelsField-${sectionId}`).style.display = (type === 'RATIO_PAIR') ? 'block' : 'none';
+  }
+
+  async function createQuestion(sectionId, parentQuestionId, revealCondition) {
+    const questionKey = document.getElementById(`qKey-${sectionId}`).value.trim();
+    const label = document.getElementById(`qLabel-${sectionId}`).value.trim();
+    const type = document.getElementById(`qType-${sectionId}`).value;
+    const optionsRaw = document.getElementById(`qOptions-${sectionId}`).value.trim();
+    const options = optionsRaw ? optionsRaw.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
+    const subLabel1 = document.getElementById(`qSub1-${sectionId}`).value.trim() || undefined;
+    const subLabel2 = document.getElementById(`qSub2-${sectionId}`).value.trim() || undefined;
+    if (!questionKey || !label) { alert('Question key and label are required.'); return; }
+    try {
+      await apiPost(`/api/questionnaire/sections/${sectionId}/questions`, {
+        questionKey, label, type, options, subLabel1, subLabel2, parentQuestionId, revealCondition
+      });
+      openSections.add(sectionId);
+      renderSchemeDetail(currentSchemeId);
+    } catch (err) {
+      alert('Couldn\'t add question: ' + err.message);
+    }
+  }
+
+  async function deleteQuestion(id) {
+    if (!confirm('Delete this question? Any follow-up questions under it will be deleted too.')) return;
+    try {
+      await apiDelete(`/api/questionnaire/questions/${id}`);
+      renderSchemeDetail(currentSchemeId);
+    } catch (err) {
+      alert('Couldn\'t delete question: ' + err.message);
+    }
+  }
+
+  render();
+</script>
+</body>
+</html>

@@ -22,6 +22,14 @@ function isAdmin() {
   return getRole() === 'admin';
 }
 
+// The Questionnaire section (managing the inspection structure itself)
+// is district-wide in its effect, so it's restricted to the DM
+// specifically — rank 1 — rather than every admin.
+function isDM() {
+  const profile = getProfile();
+  return isAdmin() && profile && profile.rank === 1;
+}
+
 function requireLogin() {
   if (!getToken()) {
     window.location.href = 'login.html';
@@ -131,5 +139,8 @@ function renderSidebarFooter() {
 
   if (role === 'admin') {
     document.querySelectorAll('.admin-only-nav').forEach((el) => { el.style.display = ''; });
+  }
+  if (isDM()) {
+    document.querySelectorAll('.dm-only-nav').forEach((el) => { el.style.display = ''; });
   }
 }
